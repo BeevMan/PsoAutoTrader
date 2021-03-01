@@ -1,4 +1,4 @@
-﻿; PSO's chatlog saves to C:\Users\bilbo\EphineaPSO\log
+﻿; PSO's chatlog saves to C:\Users\bilbo\Pso'sDirectory\log
 ;   Will be useful when needing to read customers response/request
 ;
 ;
@@ -17,7 +17,8 @@
 ;
 ;
 ;
-;   CURRENTLY I AM WORKING ON sorting through the chat log to decide which index/item the customer wants
+;   Need to test that the script will return indexes requested in chat with all the scripts variables
+;     
 ;   
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
@@ -28,13 +29,10 @@ SendMode Event        ; REQUIRED!!!! PSOBB won't accept the deemed superior
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
 SetKeyDelay, 100, 70   ; SetKeyDelay, 150, 70  1st parameter is delay between keys 2nd is how long the button is pressed
 
-; change the directory and save the inventory as inventory.txt
-; I SHOULD REWORK THIS TO GET THE NEWEST saved_inventory.txt from the directory
-FileRead, inventoryTxt, C:\Program Files\EphineaPSO\addons\Item Reader\inventory\inventory.txt
-global g_inventory := StrSplit( inventoryTxt, "`n" )
-; when the item reader addon saves an inventory file, it ends in a newline
-;   remove the last newline so it's the same length as the inventory
-g_inventory.RemoveAt( g_inventory.Length() )
+; CHANGE THIS TO PSO's DIRECTORY
+global g_psoDirectory := "C:\Users\beeni\EphineaPSO"
+
+global g_inventory := GetInventory()
 global g_itemPrices := []
 Loop % g_inventory.Length() {
     g_itemPrices.Push( 2 )
@@ -79,6 +77,7 @@ global g_timeItemsShown := 0
         ; if somebody is offering to trade
         if ( VerifyScreen( "TradeImages\tradeProposal.png", 3000 ) ) 
             {
+            ; if 
             if ( VerifyScreen( "TradeImages\yesTradeProposal.png", 3000 ) )
                 {
                 Send {Enter} ; accept the trade offer
@@ -109,6 +108,13 @@ global g_timeItemsShown := 0
     return
 
 
+; Returns the "inventory" from the newest Item Reader file
+GetInventory()
+{
+    FileRead, inventoryTxt, %g_psoDirectory%\addons\Item Reader\inventory\inventory.txt
+    inventoryTxt := StrSplit( inventoryTxt, "`n" )
+    return inventoryTxt.RemoveAt( inventoryTxt.Length() )
+}
 
 
 ; ----------------------------------------------------------
@@ -246,7 +252,7 @@ WatchChatLog()
 ; Finds the newest chat log in your PSO directory
 GetCurrentChatLog()
 {
-    Loop, Files, C:\Users\beeni\EphineaPSO\log\chat*.txt 
+    Loop, Files, %g_psoDirectory%\log\chat*.txt 
     {
         newestChatLog := ""
         lastModifiedTime := 0  
@@ -256,8 +262,8 @@ GetCurrentChatLog()
             lastModifiedTime := A_LoopFileTimeModified
         } 
     }
-    ; CHANGE THIS PATH to PSO's current chat log directory
-    return "C:\Users\beeni\EphineaPSO\log\"newestChatLog
+    newestLogPath := g_psoDirectory "\log\" newestChatLog
+    return newestLogPath
 }
 
 
@@ -402,8 +408,8 @@ NumbersInArray( playerChat )
 RemoveUndefinedArrEnd( arrToCheck )
 {
     ; without the greater than 1, it would REACH MAX RECURSION CALLS IF PASSED AN ARRAY WITH A SINGLE EMPTY INDEX
-    ; If the last index is empty and the arrarys length is greater than 1, remove it
-    if ( !arrToCheck[ arrToCheck.Length() ] and arrToCheck.Length() > 1 ) 
+    ; If the last index is empty and the arrarys length is greater than or equal to 1, remove it
+    if ( !arrToCheck[ arrToCheck.Length() ] and arrToCheck.Length() >= 1 ) 
     {
         arrToCheck.RemoveAt( -1 )
         ; Recursively call it's self to continue to check
