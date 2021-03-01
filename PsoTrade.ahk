@@ -22,7 +22,7 @@
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
-#IfWinActive Ephinea: Phantasy Star Online Blue Burst
+;#IfWinActive Ephinea: Phantasy Star Online Blue Burst
 ; #Include <Vis2>
 SendMode Event        ; REQUIRED!!!! PSOBB won't accept the deemed superior
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
@@ -46,14 +46,16 @@ global g_timeItemsShown := 0
 ^p:: Pause  ; Ctrl + P - Pauses script.
      
 
-^t::
+^t:: ; Ctrl + T - Test if it's parsing the chatlog down to numbers only
     
+    MessageArray( FindRequestedIndexes() )
     return
+
 
 ^q:: ; Ctrl + Q - Display itemsInventory 
     displayInventory := ""
     Loop % g_inventory.Length() {
-        displayInventory := g_inventory "`n"
+        displayInventory := g_inventory "`n" ; I ASSUME THIS SHOULD BE displayInventory := displayInventory "`n"
         displayInventory := displayInventory g_inventory[ A_Index ]
     } 
     MsgBox  itemsInventory, starting at index 1 %displayInventory%
@@ -203,12 +205,12 @@ coords for attempting OCR name grab during trade 40,280,120,15, "Ephinea: Phanta
 WatchChatLog()
 {
     tradeFinished := false
-    
+    requestedItemIndexes := []
     ; trade for up to 5 minutes (300 = 5mins), or until tradeFinished = true
     while ( TradeTimer( g_timeItemsShown ) < 300 and !tradeFinished ) 
     {
-        chatLogDuringTrade := []
-        requestedIndex := []
+        ; array of index numbers found in the current chat log
+        requestedIndex := FindRequestedIndexes()
 
         if ( VerifyScreen( "TradeImages\cancelled.PNG", 1500 ) )
         {
@@ -229,71 +231,33 @@ WatchChatLog()
                 Send {Enter}
             }
         }
-        else if ( chatLogDuringTrade.Length() <= 0 )
+        else if ( requestedItemIndexes.Length() < requestedIndex.Length() )
         {
-            newestChatTxt := GetCurrentChatLog()
-            FileRead, entireChatLog, %newestChatTxt%
-            chatLogArray := StrSplit( entireChatLog, "`n" )
+            requestedItemIndexes := requestedIndex
 
+            ; add the requestedItemIndexes to the trade if they are not already
 
-            Loop % chatLogArray.Length() {
-                ; splitLine[1] = time, splitLine[2] = guildcard/KeyPress, splitLine[3] = aUserName/WhatKeyPressDid, splitLine[4+] = words in chat ( there can be more than 4 if there is a tab in the chat )
-                splitLine := StrSplit( chatLogArray[ A_Index ], "`t" )
-
-                
-                ; If the line of chat was said since being shown the items for trade.
-                if ( TradeTimer( ChatLogTimeInSecs( splitLine[1] ) ) <= TradeTimer( g_timeItemsShown ) )
-                {
-                    wordsInChat := StrSplit( splitLine[4], " " )
-                    chatLogDuringTrade.Push( splitLine[4] )
-                    /*
-                    Loop % wordsInChat.Length() {
-                        checkNumb := wordsInChat[ A_Index ] + 0
-                        if checkNumb is number ; Will only be true if it contains only Numbers! ; is KEYWORD is not valid in an expression
-                           requestedIndex.Push( wordsInChat[ A_Index ] )
-                    }
-                    */
-                }
-
-            }
-
-            ; check for messages since the trade had my items shown
-            ;   then check through that for item requests I.E what GiveInstructions() tells user
         }
-
-        displayChat := ""
-        Loop % chatLogDuringTrade.Length() {
-            displayChat := displayChat "`n" chatLogDuringTrade[ A_index ]
-            ;MsgBox, %displayChat%
-        }
-        MsgBox, Should contain only chat occuring since I showed my items. %displayChat%
-
-        /*
-        requested := ""
-        Loop % requestedIndex.Length() {
-            requested += "`n" requestedIndex[ A_index ]
-        }
-        MsgBox, these numbers were found in the chatlog during the trade %requested%
-        */
     }
 }
 
 
 
-
+; Finds the newest chat log in your PSO directory
 GetCurrentChatLog()
 {
-    Loop, Files, C:\Program Files\EphineaPSO\log\chat*.txt 
+    Loop, Files, C:\Users\beeni\EphineaPSO\log\chat*.txt 
     {
         newestChatLog := ""
         lastModifiedTime := 0  
-        if (  lastModifiedTime - A_LoopFileTimeModified > 0 or lastModifiedTime == 0 )
+        if (  lastModifiedTime - A_LoopFileTimeModified < 0 or lastModifiedTime == 0 )
         {
             newestChatLog := A_LoopFileName
             lastModifiedTime := A_LoopFileTimeModified
         } 
     }
-    return "C:\Program Files\EphineaPSO\log\"newestChatLog
+    ; CHANGE THIS PATH to PSO's current chat log directory
+    return "C:\Users\beeni\EphineaPSO\log\"newestChatLog
 }
 
 
@@ -334,4 +298,148 @@ ChatLogTimeInSecs( chatTimeString )
     ; chatTime[1] = hours, [2] = minutes, [3] = seconds
     chatTime := StrSplit( chatTimeString, ":")
     return TimeInSecs( chatTime[1], chatTime[2], chatTime[3] )
+}
+
+
+; Loops through array converting it into a string then displays it via MsgBox
+MessageArray( displayMe )
+{
+    arrayToDisplay := displayMe
+    displayString := ""
+    Loop % arrayToDisplay.Length() {
+        displayString := displayString "`n"
+        displayString := displayString arrayToDisplay[ A_Index ]
+    } 
+    MsgBox  requested array, %displayString%
+}
+
+
+; Returns the newest chat log as an array, index = new line in chat log
+GetChatAsArray()
+{
+    newestChatTxt := GetCurrentChatLog()
+    FileRead, entireChatLog, %newestChatTxt%
+    chatLogArray := StrSplit( entireChatLog, "`n" )
+    return chatLogArray
+}
+
+
+; Filter chat log to only chat that has been said since items were shown.
+SaidInThisTrade( log )
+{
+    saidSinceShown := []
+    Loop % log.Length() {
+        ; splitLine[1] = time, splitLine[2] = guildcard/KeyPress, splitLine[3] = aUserName/WhatKeyPressDid, splitLine[4+] = words in chat ( there can be more than 4 if there is a tab in the chat )
+        splitLine := StrSplit( log[ A_Index ], "`t" ) ; could also use A_Tab ?
+        ; If the line of chat was said since being shown the items for trade.
+        
+    ;!!!    ;COMMENTED OUT FOR INITIAL TESTING    ;!!!
+        ;if ( TradeTimer( ChatLogTimeInSecs( splitLine[1] ) ) <= TradeTimer( g_timeItemsShown ) )
+        ;{
+            ; I STILL NEED TO CHECK IF THERE IS ANY indexes higher than 4 in splitLine
+            ; pushes splitLine[ 4+ ] into a variable 
+            Loop % splitLine.Length() - 3 {
+                saidSinceShown.Push( splitLine[ A_Index + 3 ] )
+            }
+        ;}
+    }
+    return saidSinceShown
+}
+
+
+; Loops array then splits strings by spaces then returns new array
+SplitByWords( chat )
+{
+    splitIntoWords := []
+    Loop % chat.Length() {
+        splitChat := StrSplit( chat[ A_Index ], A_Space )
+        Loop % splitChat.Length() {
+            splitIntoWords.Push( splitChat[ A_Index ] )
+        }
+    }
+    return splitIntoWords
+}
+
+
+
+; return true if string can be converted to a digit greater than 0
+IsDigit( chatString )
+{
+    ; converts to 0 if it's a string of text that doesn't end with a number greater than 0
+    chatString += 0
+    isIt := False
+    if chatString is digit
+    {
+        if ( chatString > 0 )
+        {
+            isIt := True
+        }
+    }
+    return isIt
+}
+
+
+; Returns an array of numbers
+NumbersInArray( playerChat ) 
+{
+    foundNumbers := ""
+
+    wordsInChat := SplitByWords( playerChat )
+    Loop % wordsInChat.Length() {
+        if ( IsDigit( wordsInChat[ A_Index ] ) )
+        {   
+           foundNumbers := foundNumbers wordsInChat[ A_Index ] ","
+        }
+    }
+    MsgBox %foundNumbers%
+    Sort foundNumbers, N D, U  ; Sort numerically, use comma as delimiter and remove duplicates.
+    
+    return StrSplit( foundNumbers, "," )
+}
+
+
+; Removes empty indexes from the end of an array
+RemoveUndefinedArrEnd( arrToCheck )
+{
+    ; without the greater than 1, it would REACH MAX RECURSION CALLS IF PASSED AN ARRAY WITH A SINGLE EMPTY INDEX
+    ; If the last index is empty and the arrarys length is greater than 1, remove it
+    if ( !arrToCheck[ arrToCheck.Length() ] and arrToCheck.Length() > 1 ) 
+    {
+        arrToCheck.RemoveAt( -1 )
+        ; Recursively call it's self to continue to check
+        RemoveUndefinedArrEnd( arrToCheck )
+    }
+    else 
+    {
+        return arrToCheck
+    }
+}
+
+
+FindRequestedIndexes()
+{
+    requestedIndexes := []
+
+    ; Get the newest chat log as an array, each newline in the log is a new index of the array.
+    chatLogLines := GetChatAsArray()
+
+    ; Filter chatLogLines to only the chat that has been said since trade started.
+    saidDuringTrade := SaidInThisTrade( chatLogLines )
+
+    ; Filter to unique numbers found in saidDuringTrade, also sort them least to greatest
+    numbersInChat := NumbersInArray( saidDuringTrade )
+
+    ;Loops the numbers found in the chat log then pushes them into requestedIndexes if they are in within g_inventory.Length()
+    Loop % numbersInChat.Length() {
+        
+    ;!!!    ; CHANGED FOR INITIAL TESTING   :!!!
+        if ( numbersInChat[ A_Index ] <= 30 and numbersInChat[ A_Index ] > 0 ) ;( numbersInChat[ A_Index ] <= g_inventory.Length() and numbersInChat[ A_Index ] > 0 )
+        {
+            requestedIndexes.Push( numbersInChat[ A_Index ] )
+        }
+    }
+    ; Removes empty variables from the array
+    requestedIndexes := (RemoveUndefinedArrEnd( requestedIndexes ))
+
+    return requestedIndexes
 }
