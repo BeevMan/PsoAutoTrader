@@ -18,6 +18,12 @@
 ;
 ;
 ;   Need to test that the script will return indexes requested in chat with all the scripts variables
+;       
+;
+;
+;
+;
+;   THEN I will be able to start writing the function/s to add the requested indexes to the trade
 ;     
 ;   
 
@@ -33,6 +39,7 @@ SetKeyDelay, 100, 70   ; SetKeyDelay, 150, 70  1st parameter is delay between ke
 global g_psoDirectory := "C:\Users\beeni\EphineaPSO"
 
 global g_inventory := GetInventory()
+MessageArray( g_inventory )
 global g_itemPrices := []
 Loop % g_inventory.Length() {
     g_itemPrices.Push( 2 )
@@ -46,7 +53,7 @@ global g_timeItemsShown := 0
 
 ^t:: ; Ctrl + T - Test if it's parsing the chatlog down to numbers only
     
-    MessageArray( FindRequestedIndexes() )
+    FindRequestedIndexes()
     return
 
 
@@ -63,8 +70,7 @@ global g_timeItemsShown := 0
 
 ^j::    ; Ctrl + J - Begins the trading script.
     loopsWithNoTrade := 0
-    while ( g_inventory.Length() > 0 )
-        {
+    while ( g_inventory.Length() > 0 ) {
         if ( g_inventory.Length() != g_itemPrices.Length() )
             {
             MsgBox, Error! inventory and item prices have different lengths!
@@ -104,16 +110,38 @@ global g_timeItemsShown := 0
             sleep, 3000
             ++loopsWithNoTrade
             }
-        }
+    }
     return
 
 
 ; Returns the "inventory" from the newest Item Reader file
 GetInventory()
 {
-    FileRead, inventoryTxt, %g_psoDirectory%\addons\Item Reader\inventory\inventory.txt
+    newestInventoryTxt := GetInventoryPath()
+    FileRead, inventoryTxt, %newestInventoryTxt%
     inventoryTxt := StrSplit( inventoryTxt, "`n" )
-    return inventoryTxt.RemoveAt( inventoryTxt.Length() )
+    MessageArray( inventoryTxt )
+    ; Item reader add on ends the file with "`n", remove the blank/final newline
+    inventoryTxt.RemoveAt( -1 )
+    MessageArray( inventoryTxt )
+    return inventoryTxt
+}
+
+
+; Finds the newest inventory.txt file in your addons directory
+GetInventoryPath()
+{
+    Loop, Files, %g_psoDirectory%\addons\Item Reader\inventory\*saved_inventory.txt
+    {
+        newestInventory := ""
+        lastModifiedTime := 0  
+        if (  lastModifiedTime - A_LoopFileTimeModified < 0 or lastModifiedTime == 0 )
+        {
+            newestInventory := A_LoopFileName
+            lastModifiedTime := A_LoopFileTimeModified
+        } 
+    }
+    return g_psoDirectory "\addons\Item Reader\inventory\" newestInventory
 }
 
 
@@ -262,8 +290,7 @@ GetCurrentChatLog()
             lastModifiedTime := A_LoopFileTimeModified
         } 
     }
-    newestLogPath := g_psoDirectory "\log\" newestChatLog
-    return newestLogPath
+    return  g_psoDirectory "\log\" newestChatLog
 }
 
 
@@ -422,6 +449,7 @@ RemoveUndefinedArrEnd( arrToCheck )
 }
 
 
+; Returns the requested indexes from the current chat log, they can then be used to add the items to to the trade.
 FindRequestedIndexes()
 {
     requestedIndexes := []
@@ -447,5 +475,6 @@ FindRequestedIndexes()
     ; Removes empty variables from the array
     requestedIndexes := (RemoveUndefinedArrEnd( requestedIndexes ))
 
+    MessageArray( requestedIndexes )
     return requestedIndexes
 }
