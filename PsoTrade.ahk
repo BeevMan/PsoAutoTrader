@@ -1,8 +1,4 @@
-﻿; PSO's chatlog saves to C:\Users\bilbo\Pso'sDirectory\log
-;   Will be useful when needing to read customers response/request
-;
-;
-; Need to figure out how to use OCR and find the best place to use it/ where it matches best
+﻿; Need to figure out how to use OCR and find the best place to use it/ where it matches best
 ;     I should only try to implement this if people decide to try to grieve my shop script
 ;     It works fairly well to retrieve names but I would have to add multiple languages and that may or may not be worth it
 ;     If I do use it I should make it match names from the chatlog by having so many of the same characters, in the chance that it didn't find the name perfectly
@@ -14,6 +10,10 @@
 ;
 ; Should be able to accept up to 4 different currencies at a time
 ;     based on the background of the trade window, anymore than 4 and I might have to consider adding the slider into images which = a headache
+;
+;
+;   I need to figure out how to scale the images to fit different sceen sizes?
+;       ImageSearch looks to have a parameter to adjust the scale of the image
 ;
 ;
 ;
@@ -29,7 +29,7 @@
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
-;#IfWinActive Ephinea: Phantasy Star Online Blue Burst
+#IfWinActive Ephinea: Phantasy Star Online Blue Burst
 ; #Include <Vis2>
 SendMode Event        ; REQUIRED!!!! PSOBB won't accept the deemed superior
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
@@ -53,15 +53,15 @@ global g_timeItemsShown := 0
 
 ^t:: ; Ctrl + T - Test if it's parsing the chatlog down to numbers only
     
-    FindRequestedIndexes()
+    test := VerifyScreen( "TradeImages\yesTradeProposal.png", 3000 )
+    MsgBox %test% 
     return
 
 
 ^q:: ; Ctrl + Q - Display itemsInventory 
     displayInventory := ""
     Loop % g_inventory.Length() {
-        displayInventory := g_inventory "`n" ; I ASSUME THIS SHOULD BE displayInventory := displayInventory "`n"
-        displayInventory := displayInventory g_inventory[ A_Index ]
+        displayInventory := displayInventory "`n" g_inventory[ A_Index ]
     } 
     MsgBox  itemsInventory, starting at index 1 %displayInventory%
     return
@@ -72,23 +72,23 @@ global g_timeItemsShown := 0
     loopsWithNoTrade := 0
     while ( g_inventory.Length() > 0 ) {
         if ( g_inventory.Length() != g_itemPrices.Length() )
-            {
+        {
             MsgBox, Error! inventory and item prices have different lengths!
-            }
+        }
         ; if divisible by 3 SHOULD MAYBE CHANGE TO SOMETHING ELSE?
         else if ( loopsWithNoTrade >= 3 and Mod( loopsWithNoTrade, 3 ) == 0 )
-            {
+        {
             TradeMeText() ; speaks and tells anybody in the game to initiate the trade with me 
-            }
+        }
         ; if somebody is offering to trade
         if ( VerifyScreen( "TradeImages\tradeProposal.png", 3000 ) ) 
-            {
+        {
             ; if 
             if ( VerifyScreen( "TradeImages\yesTradeProposal.png", 3000 ) )
-                {
+            {
                 Send {Enter} ; accept the trade offer
                 if ( VerifyScreen( "TradeImages\addItem.png", 3000 ) )
-                    {
+                {
                     ShowItems() ; adds all items from your inventory to the trade, allowing other player to see the goods.
                     g_timeItemsShown := TimeInSecs( A_Hour, A_Min, A_Sec )
                     GiveInstructions() ; tell other player/s to tell me the index or stats/%s of the item they want to buy.
@@ -99,17 +99,14 @@ global g_timeItemsShown := 0
                     ; watch chat log for trade instructions for up to 5 minutes? while also checking to make sure trade is not cancelled OR CONFIRMED???
                     ;   will also call to a function that will leave only the requested items in the trade ??? after tradee has requested it/them.
                     WatchChatLog()
-                    
-
-
-                    }
                 }
             }
+        }
         else 
-            {
+        {
             sleep, 3000
             ++loopsWithNoTrade
-            }
+        }
     }
     return
 
@@ -120,10 +117,8 @@ GetInventory()
     newestInventoryTxt := GetInventoryPath()
     FileRead, inventoryTxt, %newestInventoryTxt%
     inventoryTxt := StrSplit( inventoryTxt, "`n" )
-    MessageArray( inventoryTxt )
     ; Item reader add on ends the file with "`n", remove the blank/final newline
     inventoryTxt.RemoveAt( -1 )
-    MessageArray( inventoryTxt )
     return inventoryTxt
 }
 
@@ -466,8 +461,8 @@ FindRequestedIndexes()
     ;Loops the numbers found in the chat log then pushes them into requestedIndexes if they are in within g_inventory.Length()
     Loop % numbersInChat.Length() {
         
-    ;!!!    ; CHANGED FOR INITIAL TESTING   :!!!
-        if ( numbersInChat[ A_Index ] <= 30 and numbersInChat[ A_Index ] > 0 ) ;( numbersInChat[ A_Index ] <= g_inventory.Length() and numbersInChat[ A_Index ] > 0 )
+        
+        if ( numbersInChat[ A_Index ] <= g_inventory.Length() and numbersInChat[ A_Index ] > 0 )
         {
             requestedIndexes.Push( numbersInChat[ A_Index ] )
         }
