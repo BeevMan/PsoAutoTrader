@@ -4,7 +4,7 @@
 ;     If I do use it I should allow it to fuzzy match names???
 ;
 ; 
-; I could probably make a variable that will store the guildcard of a player and apply the discount for buying multiple items in seperate purchases
+; I could make a variable that will store the guildcard of a player and apply the discount for buying multiple items in seperate purchases
 ;   Would mostly be useful once I can accept and bank meseta 
 ;
 ;
@@ -12,8 +12,13 @@
 ;     based on the background of the trade window, anymore than 4 and I might have to consider adding the slider into images which = a headache
 ;
 ;
-;   I need to figure out how to scale the images to fit different sceen sizes???
-;       ImageSearch has a parameter to adjust the scale of the image
+; ImageSearch supports 8-bit color screens (256-color) or higher.
+;   The search behavior may vary depending on the display adapter's color depth. 
+;       Therefore, if a script will run under multiple color depths, it is best to test it on each depth setting. 
+;           You can use the shades-of-variation option (*n) to help make the behavior consistent across multiple color depths.
+;               *200 to match on my laptop with 6-bit color depth image snipped from desktop
+;               *125 to match on my desktop with 8-bit color depth image snipped from laptop
+;               ONLY TESTED VARIATIONS OF 25
 ;
 ;
 ;   I have not fully tested my timer functions/math
@@ -51,7 +56,7 @@ global g_timeItemsShown := 0
 
 ^t:: ; Ctrl + T - Test if it's parsing the chatlog down to numbers only
     
-    test := VerifyScreen( "TradeImages\yesTradeProposal.png", 3000 )
+    test := VerifyScreen( "TradeImages\laptoptradeProposal.png", 3000 )
     MsgBox %test% 
     return
 
@@ -157,7 +162,9 @@ VerifyScreen( filePath, searchTime )
     ; while imageFound == false, loop for up to 3 seconds
     while ( !imageFound and A_TickCount - searchTimer < searchTime )
     {
-        ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, %filePath%
+        ; using *200 color variations allows my laptop to find the initial tradeproposal 
+        ; ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *200 %filePath%
+        ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *125 %filePath%
         if (ErrorLevel = 2)
             MsgBox Could not conduct the search for %filePath%
         else if (ErrorLevel = 1)
