@@ -1,7 +1,7 @@
 ﻿; Need to figure out how to use OCR and find the best place to use it/ where it matches best
-;     I should only try to implement this if people decide to try to grieve my shop script
-;     It works fairly well to retrieve names but I would have to add multiple languages and that may or may not be worth it
-;     If I do use it I should make it match names from the chatlog by having so many of the same characters, in the chance that it didn't find the name perfectly
+;     I should only try to implement this if people decide to try to grieve my shop script???
+;     It works fairly well to retrieve names but I would have to add multiple languages and that may or may not be worth it???
+;     If I do use it I should allow it to fuzzy match names???
 ;
 ; 
 ; I could probably make a variable that will store the guildcard of a player and apply the discount for buying multiple items in seperate purchases
@@ -12,18 +12,16 @@
 ;     based on the background of the trade window, anymore than 4 and I might have to consider adding the slider into images which = a headache
 ;
 ;
-;   I need to figure out how to scale the images to fit different sceen sizes?
-;       ImageSearch looks to have a parameter to adjust the scale of the image
+;   I need to figure out how to scale the images to fit different sceen sizes???
+;       ImageSearch has a parameter to adjust the scale of the image
 ;
 ;
-;
-;   Need to test that the script will return indexes requested in chat with all the scripts variables
+;   I have not fully tested my timer functions/math
+;       I need to look further into AHK's native time methods
+;           using A_TickCount becomes unstable on slow machines ( times are often off by varying amounts sometimes drastic )
 ;       
 ;
-;
-;
-;
-;   THEN I will be able to start writing the function/s to add the requested indexes to the trade
+;   I started writing the function/s to add the requested indexes to the trade
 ;     
 ;   
 
@@ -36,7 +34,7 @@ SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
 SetKeyDelay, 100, 70   ; SetKeyDelay, 150, 70  1st parameter is delay between keys 2nd is how long the button is pressed
 
 ; CHANGE THIS TO PSO's DIRECTORY
-global g_psoDirectory := "C:\Users\beeni\EphineaPSO"
+global g_psoDirectory := "C:\Program Files\EphineaPSO"
 
 global g_inventory := GetInventory()
 MessageArray( g_inventory )
@@ -70,7 +68,8 @@ global g_timeItemsShown := 0
 
 ^j::    ; Ctrl + J - Begins the trading script.
     loopsWithNoTrade := 0
-    while ( g_inventory.Length() > 0 ) {
+    while ( g_inventory.Length() > 0 ) 
+    {
         if ( g_inventory.Length() != g_itemPrices.Length() )
         {
             MsgBox, Error! inventory and item prices have different lengths!
@@ -108,6 +107,7 @@ global g_timeItemsShown := 0
             ++loopsWithNoTrade
         }
     }
+    MsgBox "End of the trading script"
     return
 
 
@@ -165,14 +165,6 @@ VerifyScreen( filePath, searchTime )
         else
             imageFound := true
     }
-
-    /*
-    ; if the image could not be found in the while loop
-    if ( !imageFound )
-        {
-        g_failedSearches.Push( filePath ) 
-        }
-    */
     return imageFound
 }
 
@@ -260,12 +252,25 @@ WatchChatLog()
                 Send {Enter}
             }
         }
+        ; if it's the initial item/s request
+        else if ( requestedItemIndexes.Length() == 0 and requestedIndex.Length() ) 
+        {
+            requestedItemIndexes := requestedIndex
+            ; Removes non requested items from the trade window
+            RemoveExcessItems( requestedItemIndexes )
+        }
+        ; else if more items are requested
         else if ( requestedItemIndexes.Length() < requestedIndex.Length() )
         {
             requestedItemIndexes := requestedIndex
 
             ; add the requestedItemIndexes to the trade if they are not already
-
+            
+        }
+        ; should only go into this if statment after items have been requested and left/added to trade one or more times
+        else if ( requestedItemIndexes.Length() > 0  )
+        {
+            InitialTradeConfirm()
         }
     }
 }
@@ -361,15 +366,14 @@ SaidInThisTrade( log )
         splitLine := StrSplit( log[ A_Index ], "`t" ) ; could also use A_Tab ?
         ; If the line of chat was said since being shown the items for trade.
         
-    ;!!!    ;COMMENTED OUT FOR INITIAL TESTING    ;!!!
-        ;if ( TradeTimer( ChatLogTimeInSecs( splitLine[1] ) ) <= TradeTimer( g_timeItemsShown ) )
-        ;{
+        if ( TradeTimer( ChatLogTimeInSecs( splitLine[1] ) ) <= TradeTimer( g_timeItemsShown ) )
+        {
             ; I STILL NEED TO CHECK IF THERE IS ANY indexes higher than 4 in splitLine
             ; pushes splitLine[ 4+ ] into a variable 
             Loop % splitLine.Length() - 3 {
                 saidSinceShown.Push( splitLine[ A_Index + 3 ] )
             }
-        ;}
+        }
     }
     return saidSinceShown
 }
@@ -473,3 +477,69 @@ FindRequestedIndexes()
     MessageArray( requestedIndexes )
     return requestedIndexes
 }
+
+
+; Removes items that are not requested after the first item/s request is found in chat log
+RemoveExcessItems( requestedItems )
+{
+    ; if all items are requested, exit this function
+    if ( requestedItems.Length() == g_inventory.Length() ) 
+    {
+        return
+    }
+
+    ; highlights "Cancel Candidate"
+    Send {Down}
+    
+
+    Loop % ( g_inventory.Length() - requestedItems.Length() ) {
+        ; selects "Cancel Candidate"
+        Send {Enter}
+
+        ; should highlight !!! NON requestedItems !!!
+        Loop % ( requestedItems[ A_Index ] - 1 ) {
+            Send {Down}
+        }
+        ; removes unwanted item from trade menu
+        Send {Enter}
+    }
+
+}
+
+
+; Navigate to "Confirmed" inside the "Purpose" menu, then Send, {Enter}
+InitialTradeConfirm()
+{
+
+}
+
+/*
+; Finds current position of the "Purpose" menu
+FindPurposePos()
+{
+    if ( VerifyScreen( "TradeImages\addItem.png", 200 ) )
+    {
+
+    }
+    ; still need to take a snip for "cancelCandidate.png"
+    else if ( VerifyScreen(  , 200 ) )
+    {
+
+    }
+    else if ( VerifyScreen( "TradeImages\verifyItems.png", 200 ) )
+    {
+
+    }
+    ; still need to take a snip for "confirmed.png"
+    else if ( VerifyScreen(  , 200 ) )
+    {
+
+    }
+    else if ( VerifyScreen( "TradeImages\cancelTrade.png", 200 ) )
+    {
+
+    }
+}
+*/
+
+
