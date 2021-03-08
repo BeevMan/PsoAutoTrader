@@ -2,22 +2,25 @@
 ;     I should only try to implement this if people decide to try to grieve my shop script???
 ;     It works fairly well to retrieve names but I would have to add multiple languages and that may or may not be worth it???
 ;     If I do use it I should allow it to fuzzy match names???
+;     Some names are cut off when stored in the games chat log files
+;       Such as MagMaker3k , that is saved as gMaker3k
 ;
 ; 
 ; I could make a variable that will store the guildcard of a player and apply the discount for buying multiple items in seperate purchases
 ;   Would mostly be useful once I can accept and bank meseta 
 ;
 ;
-; Should be able to accept up to 4 different currencies at a time
-;     based on the background of the trade window, anymore than 4 and I might have to consider adding the slider into images which = a headache
+; Should be able to accept up to 3 different currencies at a time
+;     based on the background of the trade window, anymore than 3 and I might have to consider adding the slider into images which = a headache
 ;
 ;
 ; ImageSearch supports 8-bit color screens (256-color) or higher.
 ;   The search behavior may vary depending on the display adapter's color depth. 
 ;       Therefore, if a script will run under multiple color depths, it is best to test it on each depth setting. 
 ;           You can use the shades-of-variation option (*n) to help make the behavior consistent across multiple color depths.
-;               *200 to match on my laptop with 6-bit color depth image snipped from desktop
-;               *125 to match on my desktop with 8-bit color depth image snipped from laptop
+;               *200+ to find a match on my laptop with 6-bit color depth, image snipped from desktop
+;               *125 to find a match on my desktop with 8-bit color depth, image snipped from laptop
+;               *0 to find a match when using an image snipped from itself
 ;               ONLY TESTED VARIATIONS OF 25
 ;
 ;
@@ -36,7 +39,7 @@
 ; #Include <Vis2>
 SendMode Event        ; REQUIRED!!!! PSOBB won't accept the deemed superior
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
-SetKeyDelay, 100, 70   ; SetKeyDelay, 150, 70  1st parameter is delay between keys 2nd is how long the button is pressed
+SetKeyDelay, 190, 70   ; SetKeyDelay, 150, 70  1st parameter is delay between keys 2nd is how long the button is pressed
 
 ; CHANGE THIS TO PSO's DIRECTORY
 global g_psoDirectory := "C:\Program Files\EphineaPSO"
@@ -123,7 +126,7 @@ GetInventory()
     FileRead, inventoryTxt, %newestInventoryTxt%
     inventoryTxt := StrSplit( inventoryTxt, "`n" )
     ; Item reader add on ends the file with "`n", remove the blank/final newline
-    inventoryTxt.RemoveAt( -1 )
+    inventoryTxt.RemoveAt( inventoryTxt.Length() )
     return inventoryTxt
 }
 
@@ -185,7 +188,7 @@ ShowItems()
 {
     Loop % ( g_inventory.Length() * 2 ) {
         Send {Enter}
-        ; if I add in one extra Send "{Enter}" and check on the final iteration of the loop for the noItem.png 
+        ; if I add in one extra Send "{Enter}" and check on the final iteration of the loop for the noItem.png or check for the currency that should be inventory
         ;   It would verify that all items are displayed/in trade and in order ( because it was just sending the Enter key ) 
         ; Would need to add a Send "{Backspace}" after seeing noItem.png
         ;   then verify that it's back in the trade menu with, VerifyScreen( "TradeImages\addItem.png" )
@@ -196,8 +199,9 @@ ShowItems()
 
 TradeMeText()
 {
-    Send {Space}I am an automated trader, running via AHK script :) {Enter}
-    Send {Space}Please send me a trade offer to see what I have for sale :) {Enter}
+    Send {Space}Trade me txt {Enter}
+   ; Send {Space}I am an automated trader, running via AHK script :) {Enter}
+   ; Send {Space}Please send me a trade offer to see what I have for sale :) {Enter}
 }
 
 
@@ -205,7 +209,8 @@ TradeMeText()
 GiveInstructions()
 {
     numOfItems := g_inventory.Length()
-    Send {Space}Tell me the index (1-%numOfItems%) of the item you are interested in {Enter}
+    Send {Space}Tell me the index (1-%numOfItems%){Enter}
+    ; Send {Space}Tell me the index (1-%numOfItems%) of the item you are interested in {Enter}
     textVar :=  "%s or it's stats :)"
     ;Send {Space}Alternitavely, tell me the item's %textVar% {Enter}
 }
@@ -427,31 +432,17 @@ NumbersInArray( playerChat )
     Loop % wordsInChat.Length() {
         if ( IsDigit( wordsInChat[ A_Index ] ) )
         {   
-           foundNumbers := foundNumbers wordsInChat[ A_Index ] ","
+            foundNumbers := foundNumbers wordsInChat[ A_Index ] ","
+        } 
+        if ( A_Index == wordsInChat.Length() and foundNumbers != "" ) 
+        {
+            ; remove the final comma if a number was found
+            foundNumbers := SubStr( foundNumbers, 1 , -1 )
         }
     }
-    MsgBox %foundNumbers%
     Sort foundNumbers, N D, U  ; Sort numerically, use comma as delimiter and remove duplicates.
-    
-    return StrSplit( foundNumbers, "," )
-}
-
-
-; Removes empty indexes from the end of an array
-RemoveUndefinedArrEnd( arrToCheck )
-{
-    ; without the greater than 1, it would REACH MAX RECURSION CALLS IF PASSED AN ARRAY WITH A SINGLE EMPTY INDEX
-    ; If the last index is empty and the arrarys length is greater than or equal to 1, remove it
-    if ( !arrToCheck[ arrToCheck.Length() ] and arrToCheck.Length() >= 1 ) 
-    {
-        arrToCheck.RemoveAt( -1 )
-        ; Recursively call it's self to continue to check
-        RemoveUndefinedArrEnd( arrToCheck )
-    }
-    else 
-    {
-        return arrToCheck
-    }
+    arrFoundNumbers := StrSplit( foundNumbers, "," )
+    return arrFoundNumbers
 }
 
 
@@ -467,21 +458,33 @@ FindRequestedIndexes()
     saidDuringTrade := SaidInThisTrade( chatLogLines )
 
     ; Filter to unique numbers found in saidDuringTrade, also sort them least to greatest
-    numbersInChat := NumbersInArray( saidDuringTrade )
+    numbersInChat := NumbersInArray( saidDuringTrade ) 
 
     ;Loops the numbers found in the chat log then pushes them into requestedIndexes if they are in within g_inventory.Length()
     Loop % numbersInChat.Length() {
+        numbInChat := numbersInChat[ A_Index ]
+        ; convert to a number if possible
+        numbInChat += 0
         
-        
-        if ( numbersInChat[ A_Index ] <= g_inventory.Length() and numbersInChat[ A_Index ] > 0 )
+        if ( numbInChat <= g_inventory.Length() and numbInChat > 0 )
         {
-            requestedIndexes.Push( numbersInChat[ A_Index ] )
+            requestedIndexes.Push( numbInChat )
         }
+        /* ; FOR TESTING  
+        else if ( numbInChat <= g_inventory.Length() )
+        {
+            MsgBox it considers it less than or equal to the inventories length %numbInChat%
+        }
+        else if ( numbInChat > 0 )
+        {
+            MsgBox it considers it greater then 0 but not less than or equal to the inventories length %numbInChat%
+        }
+        else 
+        {
+            MsgBox it doesn not consider it greater then 0 or less than or equal to the inventories length %numbInChat%
+        }
+        */
     }
-    ; Removes empty variables from the array
-    requestedIndexes := (RemoveUndefinedArrEnd( requestedIndexes ))
-
-    MessageArray( requestedIndexes )
     return requestedIndexes
 }
 
@@ -528,8 +531,7 @@ FindPurposePos()
     {
 
     }
-    ; still need to take a snip for "cancelCandidate.png"
-    else if ( VerifyScreen(  , 200 ) )
+    else if ( VerifyScreen(  "TradeImages\cancelCandidate.png", 200 ) )
     {
 
     }
@@ -537,8 +539,7 @@ FindPurposePos()
     {
 
     }
-    ; still need to take a snip for "confirmed.png"
-    else if ( VerifyScreen(  , 200 ) )
+    else if ( VerifyScreen(   "TradeImages\confirmed.png", 200 ) )
     {
 
     }
