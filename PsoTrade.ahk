@@ -29,7 +29,7 @@
 ;           using A_TickCount becomes unstable on slow machines ( times are often off by varying amounts sometimes drastic )
 ;       
 ;
-;   I started writing the function/s to add the requested indexes to the trade
+;   Need to test if my new functions will leave only the requested items in trade and select the first "confirmed"
 ;     
 ;   
 
@@ -237,6 +237,7 @@ coords for attempting OCR name grab during trade 40,280,120,15, "Ephinea: Phanta
 
 WatchChatLog()
 {
+    ; WILL PROBABLY HAVE TO MAKE THIS VARIABLE GLOBAL
     tradeFinished := false
     requestedItemIndexes := []
     ; trade for up to 5 minutes (300 = 5mins), or until tradeFinished = true
@@ -247,25 +248,11 @@ WatchChatLog()
 
         if ( VerifyScreen( "TradeImages\cancelled.PNG", 1500 ) )
         {
-            ; exit out of the cancel pop up and tell customer thanks for looking?
-            Send {Enter}
-            if ( VerifyScreen( "TradeImages\cancelled.PNG", 2000 ) )
-            {
-                Send {Enter}
-                ; THIS WILL NOT FOR SURELY GET ME OUT OF HERE I NEED A BETTER CHECK
-            }
-            if ( !VerifyScreen( "TradeImages\cancelled.PNG", 1500 ) )
-            {
-                Send {Space}TY for looking :){Enter}
-            }
-            else 
-            {
-                ; THIS WILL NOT FOR SURELY GET ME OUT OF HERE I NEED A BETTER CHECK
-                Send {Enter}
-            }
+            ; exit out of the cancel pop up and tell customer thanks for looking
+            HandleTradeCancel()
         }
         ; if it's the initial item/s request
-        else if ( requestedItemIndexes.Length() == 0 and requestedIndex.Length() ) 
+        else if ( requestedItemIndexes.Length() == 0 and requestedIndex.Length() > 0 ) 
         {
             requestedItemIndexes := requestedIndex
             ; Removes non requested items from the trade window
@@ -277,16 +264,41 @@ WatchChatLog()
             requestedItemIndexes := requestedIndex
 
             ; add the requestedItemIndexes to the trade if they are not already
-            
+            ; WILL WRITE THIS FUNCTION AT A LATER DATE / not needed for beta concept
         }
-        ; should only go into this if statment after items have been requested and left/added to trade one or more times
+        ; should only go into this if statement after items have been requested and left/added to trade one or more times
         else if ( requestedItemIndexes.Length() > 0  )
         {
+            ; should navigate to the first trade confirm and select it
             InitialTradeConfirm()
         }
     }
 }
 
+
+; Makes sure to exit out of the cancel pop up, cancel pop up is triggered by customers ONLY???
+HandleTradeCancel()
+{
+    ; double check that the trade cancel pop up is present
+    if ( VerifyScreen( "TradeImages\cancelled.PNG", 500 ) )
+    {
+        ; exit out of the cancel pop up
+        Send {Enter}
+    }
+    ; if the cancel pop up is still present (should only happen when the previous enter did not register)
+    if ( VerifyScreen( "TradeImages\cancelled.PNG", 1000 ) )
+    {
+        ; recursively call itself until the trade is cancelled
+        HandleTradeCancel()
+    }
+    ; SHOULD CONSIDER LOOKING FOR A IMAGE THAT IS FOUND AFTER CANCELLING THE TRADE, check for it here
+    ; or simply check to make sure that cancelled.PNG can NOT be found
+    else
+    {
+        ; tell the customer thanks for looking
+        Send {Space}TY for looking :){Enter}
+    }
+}
 
 
 ; Finds the newest chat log in your PSO directory
@@ -376,8 +388,8 @@ SaidInThisTrade( log )
     Loop % log.Length() {
         ; splitLine[1] = time, splitLine[2] = guildcard/KeyPress, splitLine[3] = aUserName/WhatKeyPressDid, splitLine[4+] = words in chat ( there can be more than 4 if there is a tab in the chat )
         splitLine := StrSplit( log[ A_Index ], "`t" ) ; could also use A_Tab ?
+       
         ; If the line of chat was said since being shown the items for trade.
-        
         if ( TradeTimer( ChatLogTimeInSecs( splitLine[1] ) ) <= TradeTimer( g_timeItemsShown ) )
         {
             ; I STILL NEED TO CHECK IF THERE IS ANY indexes higher than 4 in splitLine
@@ -489,6 +501,7 @@ FindRequestedIndexes()
 }
 
 
+; NOT FUNCTIONING YET
 ; Removes items that are not requested after the first item/s request is found in chat log
 RemoveExcessItems( requestedItems )
 {
@@ -499,55 +512,145 @@ RemoveExcessItems( requestedItems )
     }
 
     ; highlights "Cancel Candidate"
-    Send {Down}
+    HoverCancelCandidate()
     
+    nonRequestedItems := GetNonRequested()
+    ; the "Cancel Candidate" menu retains the position in between cancels
+    cancelPos := 1
 
-    Loop % ( g_inventory.Length() - requestedItems.Length() ) {
+    ; this variable will be used later to decide which images to match on screen, to verify the correct items are being removed
+    itemsInTrade := g_inventory.Length()
+
+    Loop % nonRequestedItems.Length() {
         ; selects "Cancel Candidate"
         Send {Enter}
 
-        ; should highlight !!! NON requestedItems !!!
-        Loop % ( requestedItems[ A_Index ] - 1 ) {
-            Send {Down}
+        
+        if ( cancelPos == nonRequestedItems[ A_Index ] )
+        {
+            ; removes unwanted item from trade menu
+            Send {Enter}
         }
-        ; removes unwanted item from trade menu
-        Send {Enter}
+        else 
+        {
+            ; unsure if A_Index from the above loop will be accepted here
+            ; should hover/highlight the next unwanted item
+            Loop % ( nonRequestedItems[ A_Index ] - cancelPos ) {
+                Send {Down}
+                cancelPos++
+            }
+            ; removes unwanted item from trade menu
+            Send {Enter}
+        }
+    ; decrease the variable to reflect the item that was removed from trade    
+    itemsInTrade--
     }
 
 }
 
 
-; Navigate to "Confirmed" inside the "Purpose" menu, then Send, {Enter}
-InitialTradeConfirm()
+; hover/highlight "Cancel Candidate"
+HoverCancelCandidate()
+{
+    currentPos = FindPurposePos()
+    if ( currentPos == 2 )
+    {
+        ; do nothing/exit function
+    }
+    else if ( currentPos == 1 )
+    {
+        Send {Up}
+        HoverCancelCandidate()
+    }
+    else 
+    {
+        Loop % FindPurposePos() - 2 {
+            Send {Down}
+        }
+        HoverCancelCandidate()
+    }
+}
+
+
+; hover/highlight non requested items
+HoverNonRequested()
 {
 
 }
 
-/*
-; Finds current position of the "Purpose" menu
+
+; Returns items that were not requested
+GetNonRequested( requested )
+{
+    notRequested := []
+
+    ; index used for iterating over requested
+    i := 1
+    Loop % g_inventory.Length() {
+        if ( A_Index != requested[ i ] )
+        {
+            notRequested.Push( A_Index )
+        }
+        else 
+        {
+            i++
+        }
+    }
+    return notRequested
+}
+
+
+; selects the first confirmation in the trade
+InitialTradeConfirm()
+{
+    currentPos = FindPurposePos()
+    ; if confirmed is highlighted 
+    if ( currentPos == 4 )
+    {
+        Send {Enter}
+    }
+    else if ( currentPos == 5 )
+    {
+        Send {Down}
+        InitialTradeConfirm()
+    }
+    else 
+    {
+        Loop % ( 4 - currentPos ) {
+            Send {Up}
+        }
+        InitialTradeConfirm()
+    }
+}
+
+
+; Finds current position of the "Purpose" menu returns 1 - 5
 FindPurposePos()
 {
     if ( VerifyScreen( "TradeImages\addItem.png", 200 ) )
     {
-
+        return 1
     }
-    else if ( VerifyScreen(  "TradeImages\cancelCandidate.png", 200 ) )
+    else if ( VerifyScreen( "TradeImages\cancelCandidate.png", 200 ) )
     {
-
+        return 2
     }
     else if ( VerifyScreen( "TradeImages\verifyItems.png", 200 ) )
     {
-
+        return 3
     }
-    else if ( VerifyScreen(   "TradeImages\confirmed.png", 200 ) )
+    else if ( VerifyScreen( "TradeImages\confirmed.png", 200 ) )
     {
-
+        return 4
     }
     else if ( VerifyScreen( "TradeImages\cancelTrade.png", 200 ) )
     {
-
+        return 5
+    }
+    else 
+    {
+        FindPurposePos()
     }
 }
-*/
 
 
