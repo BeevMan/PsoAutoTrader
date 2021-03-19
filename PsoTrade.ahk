@@ -24,14 +24,34 @@
 ;               ONLY TESTED VARIATIONS OF 25
 ;
 ;
-;   I have not fully tested my timer functions/math
+; WHEN ADDING IN the fail saves, I should check to make sure the player joining window is not displayed?
+;   SHOULD PREVENT trying to repeat actions while no inputs are accepted
+;   IF ANOTHER PLAYER IS NOT JOINING, lag should be the only issue for inputs/macros messing up
+;
+;
+; WILL NEED TO MAKE SURE currency images are taken at the same position ( and are the same size??? position alone should be fine)
+;   will make searching easier and more reliable
+;
+;
+; I NEED TO WRITE A FUNCTION that will check the chatlog to make sure that it has completed & was succesful when talking to customers/ giving instructions
+;   I may want to repeat the instructions or just make sure it's not still trying to talk by escaping multiple times
+;       IsMessageInLog( msg, timeSaid ), still needs to be tested and implemented when the script sends a message in game
+;
+;
+;   I have not fully tested my timer functions/math ( STILL HAVE NOT TESTED TO SEE IF IT TIMES OUT AT 5 MINS )
 ;       I need to look further into AHK's native time methods
 ;           using A_TickCount becomes unstable on slow machines ( times are often off by varying amounts sometimes drastic )
 ;       
 ;
-;   Need to test if my new functions will leave only the requested items in trade and select the first "confirmed"
-;     
-;   
+;   CURRENTLY ADDING AND WILL NEED TO TEST:
+;       correctly cancel out of the trade window,  HandleTradeCancel()
+;       check if other player left game/ trade window.  If so break out of WatchChatLog()
+;       check if the message that the script tried to relay to the customer made it to the chat log, IsMessageInLog( msg, timeSaid )
+;
+;       STILL NEED TO WRITE IsPaymentCorrect( totalCost ) TO CHECK PAYMENTS
+;           check if other player has paid the correct amount and confirmed the trade 
+;       
+; 
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
@@ -199,9 +219,22 @@ ShowItems()
 
 TradeMeText()
 {
-    Send {Space}Trade me txt {Enter}
-   ; Send {Space}I am an automated trader, running via AHK script :) {Enter}
-   ; Send {Space}Please send me a trade offer to see what I have for sale :) {Enter}
+    message := "Trade me txt"
+    Send {Space}%message%{Enter}
+    ; Send {Space}I am an automated trader, running via AHK script :) {Enter}
+    ; Send {Space}Please send me a trade offer to see what I have for sale :) {Enter}
+
+    textTimeStamp := TimeInSecs( A_Hour, A_Min, A_Sec )
+    ; if the message was not said recently
+    if ( !IsMessageInLog( message, textTimeStamp ) ) 
+    {
+        MsgBox did not say the trade me txt recently
+        ; Will need to decide how I will want to handle the text not being in the log
+        ; I suspect the main reason it will not have the message in the chat recently is because of players joining
+        ; SHOULD I JUST MAKE SURE ITS NOT TRYING TO TALK STILL?? send escape or backspace to make sure its not still sending a message?
+        ; THERE SHOULD BE NO HARM IN USING Send {Space} , except that it should bring up the chat input if it's not already up
+        ; SHOULD I CHECK IF THE PLAYER IS JOINING WINDOW IS UP?
+    }
 }
 
 
@@ -209,12 +242,13 @@ TradeMeText()
 GiveInstructions()
 {
     numOfItems := g_inventory.Length()
-    Send {Space}Tell me the index (1-%numOfItems%){Enter}
+    instructions := "Tell me the index (1-" numOfItems ")"
+    ;Send {Space}Tell me the index (1-%numOfItems%){Enter}
+    Send {Space}%instructions%{Enter}
     ; Send {Space}Tell me the index (1-%numOfItems%) of the item you are interested in {Enter}
-    textVar :=  "%s or it's stats :)"
+    ;textVar :=  "%s or it's stats :)"
     ;Send {Space}Alternitavely, tell me the item's %textVar% {Enter}
 }
-
 
 
 /*
@@ -238,8 +272,9 @@ coords for attempting OCR name grab during trade 40,280,120,15, "Ephinea: Phanta
 WatchChatLog()
 {
     ; WILL PROBABLY HAVE TO MAKE THIS VARIABLE GLOBAL
-    tradeFinished := false
+    tradeFinished := False
     requestedItemIndexes := []
+    tradeTotal := GetTradeTotal( requestedItemIndexes )
     ; trade for up to 5 minutes (300 = 5mins), or until tradeFinished = true
     while ( TradeTimer( g_timeItemsShown ) < 300 and !tradeFinished ) 
     {
@@ -250,14 +285,26 @@ WatchChatLog()
         {
             ; exit out of the cancel pop up and tell customer thanks for looking
             HandleTradeCancel()
+            ; set to True to stop the loop it's in, COULD ALSO THROW A BREAK IN HERE INSTEAD
+            tradeFinished := True
         }
+        /*
+        ; CHECK TO MAKE SURE YOU ARE IN THE TRADE WINDOW.  To make sure the other player didn't leave the game/log off
+        else if ( "SomeImageOnlySeenInTrades I STILL NEED TO TAKE THE IMAGE!!!" )
+        {
+            Break
+        }
+        */
+        
+
         ; if it's the initial item/s request
-        else if ( requestedItemIndexes.Length() == 0 and requestedIndex.Length() > 0 ) 
+        if ( requestedItemIndexes.Length() == 0 and requestedIndex.Length() > 0 ) 
         {
             requestedItemIndexes := requestedIndex
             ; Removes non requested items from the trade window
             RemoveExcessItems( requestedItemIndexes )
         }
+        /*  COMMENTED OUT, CAN ADD THIS IDEA IN AT A LATER DATE if I still want to
         ; else if more items are requested
         else if ( requestedItemIndexes.Length() < requestedIndex.Length() )
         {
@@ -266,11 +313,44 @@ WatchChatLog()
             ; add the requestedItemIndexes to the trade if they are not already
             ; WILL WRITE THIS FUNCTION AT A LATER DATE / not needed for beta concept
         }
+        */
         ; should only go into this if statement after items have been requested and left/added to trade one or more times
         else if ( requestedItemIndexes.Length() > 0  )
         {
             ; should navigate to the first trade confirm and select it
             InitialTradeConfirm()
+        }
+        ; if customer has confirmed the 1st time and 1 or more items have been requested
+        ;  ( only requested items should be in the trade window )
+        else if ( requestedItemIndexes.Length() > 0 and  VerifyScreen( "TradeImages\customerConfirmed.PNG", 1500 ) )
+        {
+            ; Check if customer has put the appropriate payment into the trade window
+            if ( IsPaymentCorrect( tradeTotal ) )
+            {
+                ; Verify the customer has selected the final confirmed 
+                if ( VerifyScreen( "TradeImages\customerFinalConfirmed.PNG" ) )
+                {
+
+                }
+                ; Customer still needs to do do the final/2nd confirmation
+                else
+                {
+                    Send {Space}Select the final confirmation plz{Enter}
+                }
+            }
+            ; Tell customer how much to pay, placed it here so it checks for the payment first
+            ; should help prevent spamming the customer to put the money in the trade window when it's already there 
+            else
+            {
+                Send {Space}%tradeTotal%pd, then confirm trade plz{Enter}
+            }
+        }
+        ; if 1 or more items requested but customer has not confirmed
+        else if ( requestedItemIndexes.Length() > 0 and  !VerifyScreen( "TradeImages\customerConfirmed.PNG", 1500 ) )
+        {
+            ; I COULD AND MIGHT CHECK TO SEE IF THE PDS ARE IN THE TRADE WINDOW 
+            ; THEN RESPOND TO CUSTOMER APPROPRIATELY 
+            Send {Space}%tradeTotal%pd, then confirm plz{Enter}
         }
     }
 }
@@ -337,7 +417,7 @@ TradeTimer( timeStart )
     {
         timeInTrade := TimeInSecs( A_Hour, A_Min, A_Sec ) - timeStart
     }
-    ; if it returns 300 or more it has been 5+ minutes
+    ; if it returns 300 or more it has been 5+ minutes 1 = 1second
     return timeInTrade
 }
 
@@ -572,13 +652,6 @@ HoverCancelCandidate()
 }
 
 
-; hover/highlight non requested items
-HoverNonRequested()
-{
-
-}
-
-
 ; Returns items that were not requested
 GetNonRequested( requested )
 {
@@ -654,3 +727,102 @@ FindPurposePos()
 }
 
 
+; returns the total of all requested items
+GetTradeTotal( requestedInventory )
+{
+    totalCost := 0
+    Loop % requestedInventory.Length() {
+        totalCost += g_itemPrices[ requestedInventory[ A_Index ] ]
+    }
+    return totalCost
+}
+
+
+; Checks screen to verify the correct payment is in the trade window
+IsPaymentCorrect( totalCost )
+{
+    customerPay := 0
+    position1 := 
+    ; I NEED TO FIGURE OUT WHAT IS POS 1, 2 and 3 of the customers window
+    ; FOR NOW I will only implement POS 1 and pds 
+
+    ; if theirs photon drops in the first position
+    if ( VerifyImageAt( position1 ) )
+    {
+
+    }
+}
+
+
+; Verify that the image is at the specified position
+VerifyImageAt(  position, filePath, searchTime )
+{
+    /* 
+    ; I SHOULD ONLY NEED THE START POSITION TO FIND THE IMAGES IN THE CORRECT POSITION
+    ; Otherwise if I need the end point and I know the pictures dimensions
+    ;   then the below will help
+    xSize := ; THE PICTURES WIDTH
+    xEnd := xStart + xSize
+
+    ySize := ; THE PICTURES HEIGHT
+    yEnd := yStart + ySize
+    */
+
+    imageFound := False
+    searchTimer := A_TickCount
+    ; while imageFound == false, loop for up to searchTime seconds
+    while ( !imageFound and A_TickCount - searchTimer < searchTime )
+    { 
+
+        ; ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *200 %filePath%
+        ImageSearch, , , position, A_ScreenWidth, A_ScreenHeight *125 %filePath%
+        if (ErrorLevel = 2)
+            MsgBox Could not conduct the search for %filePath%
+        else if (ErrorLevel = 1)
+            imageFound := False
+        else
+            imageFound := True
+    }
+    return imageFound
+}
+
+
+; Returns true if the message was said close to the time expected
+IsMessageInLog( msg, timeSaid )
+{
+    foundInTime := False
+    chatLog := GetChatAsArray()
+    saidWithinTime := SaidInThisTrade( chatLog, timeSaid )
+    if ( saidWithinTime )
+    {
+        Loop % saidWithinTime.Length() {
+            if ( saidWithinTime == msg ) 
+            {
+                foundInTime := True
+            }
+        }
+    }
+    return foundInTime
+}
+
+
+; Was message said in X time 
+SaidInThisTrade( log, timeSaid )
+{
+    saidInTimeLine := []
+    Loop % log.Length() {
+        ; splitLine[1] = time, splitLine[2] = guildcard/KeyPress, splitLine[3] = aUserName/WhatKeyPressDid, splitLine[4+] = words in chat ( there can be more than 4 if there is a tab in the chat ?? )
+        splitLine := StrSplit( log[ A_Index ], "`t" ) ; could also use A_Tab ?
+       
+        ; time stamp of the chat log was said within 20 seconds of the timeSaid variable
+        if ( TradeTimer( ChatLogTimeInSecs( splitLine[1] ) ) - TradeTimer( timeSaid ) <= 20 )
+        {
+            ; I STILL NEED TO CHECK IF THERE IS ANY indexes higher than 4 in splitLine
+            ; pushes splitLine[ 4+ ] into a variable 
+            Loop % splitLine.Length() - 3 {
+                saidInTimeLine.Push( splitLine[ A_Index + 3 ] )
+            }
+        }
+    }
+    return saidInTimeLine
+}
