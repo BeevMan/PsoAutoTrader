@@ -59,7 +59,7 @@
 ; #Include <Vis2>
 SendMode Event        ; REQUIRED!!!! PSOBB won't accept the deemed superior
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
-SetKeyDelay, 190, 70   ; SetKeyDelay, 150, 70  1st parameter is delay between keys 2nd is how long the button is pressed
+SetKeyDelay, 210, 80   ; SetKeyDelay, 150, 70  1st parameter is delay between keys 2nd is how long the button is pressed
 
 ; CHANGE THIS TO PSO's DIRECTORY
 global g_psoDirectory := "C:\Program Files\EphineaPSO"
@@ -79,8 +79,9 @@ global g_timeItemsShown := 0
 
 ^t:: ; Ctrl + T - Test if it's parsing the chatlog down to numbers only
     
-    test := VerifyScreen( "TradeImages\laptoptradeProposal.png", 3000 )
-    MsgBox %test% 
+    ;test := FindPurposePos()
+    HoverCancelCandidate()
+    ;MsgBox %test% 
     return
 
 
@@ -581,7 +582,6 @@ FindRequestedIndexes()
 }
 
 
-; NOT FUNCTIONING YET
 ; Removes items that are not requested after the first item/s request is found in chat log
 RemoveExcessItems( requestedItems )
 {
@@ -594,36 +594,39 @@ RemoveExcessItems( requestedItems )
     ; highlights "Cancel Candidate"
     HoverCancelCandidate()
     
-    nonRequestedItems := GetNonRequested()
+    nonRequestedItems := GetNonRequested( requestedItems )
     ; the "Cancel Candidate" menu retains the position in between cancels
     cancelPos := 1
 
+    ; keep track of how many items have been removed from the trade
+    removedCount := 0
     ; this variable will be used later to decide which images to match on screen, to verify the correct items are being removed
-    itemsInTrade := g_inventory.Length()
+    itemsInTrade := g_inventory.Length() - removedCount 
+    
 
     Loop % nonRequestedItems.Length() {
         ; selects "Cancel Candidate"
         Send {Enter}
 
         
-        if ( cancelPos == nonRequestedItems[ A_Index ] )
+        if ( cancelPos == ( nonRequestedItems[ A_Index ] - removedCount ) )
         {
             ; removes unwanted item from trade menu
             Send {Enter}
         }
         else 
         {
-            ; unsure if A_Index from the above loop will be accepted here
+            ; THIS SEEMS TO WORK, have not fully tested yet or given it a full thought.
             ; should hover/highlight the next unwanted item
-            Loop % ( nonRequestedItems[ A_Index ] - cancelPos ) {
+            Loop % ( ( nonRequestedItems[ A_Index ] - cancelPos ) - removedCount ) {
                 Send {Down}
                 cancelPos++
             }
             ; removes unwanted item from trade menu
             Send {Enter}
         }
-    ; decrease the variable to reflect the item that was removed from trade    
-    itemsInTrade--
+    ; keep track of how many items have been removed from the trade
+    removedCount++
     }
 
 }
@@ -632,20 +635,20 @@ RemoveExcessItems( requestedItems )
 ; hover/highlight "Cancel Candidate"
 HoverCancelCandidate()
 {
-    currentPos = FindPurposePos()
+    currentPos := FindPurposePos()
     if ( currentPos == 2 )
     {
         ; do nothing/exit function
     }
     else if ( currentPos == 1 )
     {
-        Send {Up}
+        Send {Down}
         HoverCancelCandidate()
     }
-    else 
+    else if ( currentPos > 2 )
     {
-        Loop % FindPurposePos() - 2 {
-            Send {Down}
+        Loop % currentPos - 2 {
+            Send {Up}
         }
         HoverCancelCandidate()
     }
@@ -676,7 +679,7 @@ GetNonRequested( requested )
 ; selects the first confirmation in the trade
 InitialTradeConfirm()
 {
-    currentPos = FindPurposePos()
+    currentPos := FindPurposePos()
     ; if confirmed is highlighted 
     if ( currentPos == 4 )
     {
@@ -684,13 +687,13 @@ InitialTradeConfirm()
     }
     else if ( currentPos == 5 )
     {
-        Send {Down}
+        Send {Up}
         InitialTradeConfirm()
     }
     else 
     {
         Loop % ( 4 - currentPos ) {
-            Send {Up}
+            Send {Down}
         }
         InitialTradeConfirm()
     }
@@ -700,28 +703,30 @@ InitialTradeConfirm()
 ; Finds current position of the "Purpose" menu returns 1 - 5
 FindPurposePos()
 {
-    if ( VerifyScreen( "TradeImages\addItem.png", 200 ) )
+    searchTime := 400
+    if ( VerifyScreen( "TradeImages\addItem.png", searchTime ) )
     {
         return 1
     }
-    else if ( VerifyScreen( "TradeImages\cancelCandidate.png", 200 ) )
+    else if ( VerifyScreen( "TradeImages\cancelCandidate.png", searchTime ) )
     {
         return 2
     }
-    else if ( VerifyScreen( "TradeImages\verifyItems.png", 200 ) )
+    else if ( VerifyScreen( "TradeImages\verifyItems.png", searchTime ) )
     {
         return 3
     }
-    else if ( VerifyScreen( "TradeImages\confirmed.png", 200 ) )
+    else if ( VerifyScreen( "TradeImages\confirmed.png", searchTime ) )
     {
         return 4
     }
-    else if ( VerifyScreen( "TradeImages\cancelTrade.png", 200 ) )
+    else if ( VerifyScreen( "TradeImages\cancelTrade.png", searchTime ) )
     {
         return 5
     }
     else 
     {
+        ; if it didn't match any of those images
         FindPurposePos()
     }
 }
