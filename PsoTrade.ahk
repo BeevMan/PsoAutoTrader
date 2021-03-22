@@ -12,6 +12,11 @@
 ;
 ; Should be able to accept up to 3 different currencies at a time
 ;     based on the background of the trade window, anymore than 3 and I might have to consider adding the slider into images which = a headache
+;     if I accept more then 3 at a time, the 3rd position item images will have to be taken twice as it slides down with 3+ items
+;
+;
+; WILL NEED TO MAKE SURE currency images are taken at the same position ( and are the same size??? position alone should be fine)
+;   will make searching easier and more reliable
 ;
 ;
 ; ImageSearch supports 8-bit color screens (256-color) or higher.
@@ -29,13 +34,9 @@
 ;   IF ANOTHER PLAYER IS NOT JOINING, lag should be the only issue for inputs/macros messing up
 ;
 ;
-; WILL NEED TO MAKE SURE currency images are taken at the same position ( and are the same size??? position alone should be fine)
-;   will make searching easier and more reliable
-;
-;
-; I NEED TO WRITE A FUNCTION that will check the chatlog to make sure that it has completed & was succesful when talking to customers/ giving instructions
-;   I may want to repeat the instructions or just make sure it's not still trying to talk by escaping multiple times
-;       IsMessageInLog( msg, timeSaid ), still needs to be tested and implemented when the script sends a message in game
+; I NEED TO DECIDE WHAT TO DO WHEN A msg IS NOT FOUND using IsMessageInLog()
+;   I may want to repeat the instructions or just make sure it's not still trying to talk by escaping multiple times??
+;       escaping/backspacing during a trade at worse will end up in the "cancel exchange" confirmation menu
 ;
 ;
 ;   I have not fully tested my timer functions/math ( STILL HAVE NOT TESTED TO SEE IF IT TIMES OUT AT 5 MINS )
@@ -43,15 +44,18 @@
 ;           using A_TickCount becomes unstable on slow machines ( times are often off by varying amounts sometimes drastic )
 ;       
 ;
-;   CURRENTLY ADDING AND WILL NEED TO TEST:
-;       correctly cancel out of the trade window,  HandleTradeCancel()
-;       check if other player left game/ trade window.  If so break out of WatchChatLog()
-;       check if the message that the script tried to relay to the customer made it to the chat log, IsMessageInLog( msg, timeSaid )
+;   Initial testing/notes of latest additions :
+;       X correctly cancel out of the trade window,  HandleTradeCancel()
+;           seems to work just fine when other player cancels as it recursively calls itself
+;       X check if other player left game/ trade window.  If so break out of WatchChatLog()
+;           the same image of the other player cancelling the trade is shown, HandleTradeCancel() is called and takes care of it
 ;
-;       STILL NEED TO WRITE IsPaymentCorrect( totalCost ) TO CHECK PAYMENTS
-;           check if other player has paid the correct amount and confirmed the trade 
-;       
-; 
+;       X check if the message that the script tried to relay to the customer made it to the chat log, IsMessageInLog( msg, timeSaid )
+;           seems to work fine after some adjustments.  HAVE ONLY IMPLEMENTED IT INSIDE TradeMeText()
+;
+;       X Make is IsPaymentCorrect( totalCost ) CHECK FOR CORRECT PAYMENTS IN THEIR TRADE OFFER WINDOW ONLY
+;           X check if other player has paid the correct amount and confirmed the trade 
+;               currently only checks for photon drops in the 1st trade offer position
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
@@ -77,11 +81,10 @@ global g_timeItemsShown := 0
 ^p:: Pause  ; Ctrl + P - Pauses script.
      
 
-^t:: ; Ctrl + T - Test if it's parsing the chatlog down to numbers only
-    
-    ;test := FindPurposePos()
-    HoverCancelCandidate()
-    ;MsgBox %test% 
+^t:: ; Ctrl + T - Test
+    ;offerWindowPositions := [ 30, 300, 350, 370 ]
+    ;test :=  VerifyImageInCustomerOffer( offerWindowPositions, "TradeImages\photonDropPos1.png", 2000 )
+    ;MsgBox %test%
     return
 
 
@@ -222,10 +225,11 @@ TradeMeText()
 {
     message := "Trade me txt"
     Send {Space}%message%{Enter}
-    ; Send {Space}I am an automated trader, running via AHK script :) {Enter}
-    ; Send {Space}Please send me a trade offer to see what I have for sale :) {Enter}
+    ; Send {Space}I am an automated trader, running via AHK script :){Enter}
+    ; Send {Space}Please send me a trade offer to see what I have for sale :){Enter}
 
     textTimeStamp := TimeInSecs( A_Hour, A_Min, A_Sec )
+    Sleep, 5000
     ; if the message was not said recently
     if ( !IsMessageInLog( message, textTimeStamp ) ) 
     {
@@ -236,6 +240,12 @@ TradeMeText()
         ; THERE SHOULD BE NO HARM IN USING Send {Space} , except that it should bring up the chat input if it's not already up
         ; SHOULD I CHECK IF THE PLAYER IS JOINING WINDOW IS UP?
     }
+    /* REDUNDANT CHECK   DELETE AFTER TESTING
+    else if ( IsMessageInLog( message, textTimeStamp ) ) ; REMOVE AFTER TESTING
+    {
+        MsgBox message was found in the chatlog close to time it should've been said
+    }
+    */
 }
 
 
@@ -244,11 +254,8 @@ GiveInstructions()
 {
     numOfItems := g_inventory.Length()
     instructions := "Tell me the index (1-" numOfItems ")"
-    ;Send {Space}Tell me the index (1-%numOfItems%){Enter}
     Send {Space}%instructions%{Enter}
     ; Send {Space}Tell me the index (1-%numOfItems%) of the item you are interested in {Enter}
-    ;textVar :=  "%s or it's stats :)"
-    ;Send {Space}Alternitavely, tell me the item's %textVar% {Enter}
 }
 
 
@@ -272,31 +279,37 @@ coords for attempting OCR name grab during trade 40,280,120,15, "Ephinea: Phanta
 
 WatchChatLog()
 {
-    ; WILL PROBABLY HAVE TO MAKE THIS VARIABLE GLOBAL
-    tradeFinished := False
+    ; keep track of indexes that were requested in the below while loop
     requestedItemIndexes := []
-    tradeTotal := GetTradeTotal( requestedItemIndexes )
-    ; trade for up to 5 minutes (300 = 5mins), or until tradeFinished = true
-    while ( TradeTimer( g_timeItemsShown ) < 300 and !tradeFinished ) 
+
+    ; set to infinitely loop. breaks loop inside if trade lasts 5 minutes, or customer cancels 
+    while ( 0 != 1 )
     {
+        tradeTotal := GetTradeTotal( requestedItemIndexes )
+
         ; array of index numbers found in the current chat log
         requestedIndex := FindRequestedIndexes()
 
+        ; if the customer has cancelled the trade or left the game
         if ( VerifyScreen( "TradeImages\cancelled.PNG", 1500 ) )
         {
             ; exit out of the cancel pop up and tell customer thanks for looking
             HandleTradeCancel()
-            ; set to True to stop the loop it's in, COULD ALSO THROW A BREAK IN HERE INSTEAD
-            tradeFinished := True
-        }
-        /*
-        ; CHECK TO MAKE SURE YOU ARE IN THE TRADE WINDOW.  To make sure the other player didn't leave the game/log off
-        else if ( "SomeImageOnlySeenInTrades I STILL NEED TO TAKE THE IMAGE!!!" )
-        {
+            ; exit loop
             Break
         }
-        */
-        
+        ; trade has lasted longer than 5 minutes (300 = 5mins)
+        else if ( TradeTimer( g_timeItemsShown ) > 300 )
+        {
+            ; FIGURE OUT WHICH MENU IT'S CURRENTLY IN 
+
+            ; NAVIGATE TO AND SELECT Tell CANCEL TRADE
+            ;   I think backspacing/Esc will always get you to the "cancel exchange" confirmation menu.  Unless you have already selected the final confirmation.
+
+            ; exit loop
+            Break
+        }
+
 
         ; if it's the initial item/s request
         if ( requestedItemIndexes.Length() == 0 and requestedIndex.Length() > 0 ) 
@@ -305,33 +318,31 @@ WatchChatLog()
             ; Removes non requested items from the trade window
             RemoveExcessItems( requestedItemIndexes )
         }
-        /*  COMMENTED OUT, CAN ADD THIS IDEA IN AT A LATER DATE if I still want to
-        ; else if more items are requested
-        else if ( requestedItemIndexes.Length() < requestedIndex.Length() )
+        ; if nothing has been requested, Give customer instructions again
+        /* UN COMMENT THIS AFTER TESTING it's annoying to have it talk that much during testing
+        else if ( requestedItemIndexes.Length() == 0 and requestedIndex.Length() == 0 )
         {
-            requestedItemIndexes := requestedIndex
-
-            ; add the requestedItemIndexes to the trade if they are not already
-            ; WILL WRITE THIS FUNCTION AT A LATER DATE / not needed for beta concept
+            GiveInstructions()
         }
         */
         ; should only go into this if statement after items have been requested and left/added to trade one or more times
-        else if ( requestedItemIndexes.Length() > 0  )
+        else if ( requestedItemIndexes.Length() > 0 and !VerifyScreen( "TradeImages\my1stConfirm.PNG", 1500 ) )
         {
             ; should navigate to the first trade confirm and select it
             InitialTradeConfirm()
         }
-        ; if customer has confirmed the 1st time and 1 or more items have been requested
+        ; if customer has confirmed the 1st time or final time and 1 or more items have been requested
         ;  ( only requested items should be in the trade window )
-        else if ( requestedItemIndexes.Length() > 0 and  VerifyScreen( "TradeImages\customerConfirmed.PNG", 1500 ) )
+        else if ( requestedItemIndexes.Length() > 0 and  VerifyScreen( "TradeImages\customerConfirmed.PNG", 1500 ) or VerifyScreen( "TradeImages\customerFinalConfirmed.PNG", 1500 ) )
         {
             ; Check if customer has put the appropriate payment into the trade window
             if ( IsPaymentCorrect( tradeTotal ) )
             {
+                MsgBox correct payment in window
                 ; Verify the customer has selected the final confirmed 
-                if ( VerifyScreen( "TradeImages\customerFinalConfirmed.PNG" ) )
+                if ( VerifyScreen( "TradeImages\customerFinalConfirmed.PNG", 1500 ) )
                 {
-
+                    MsgBox customer has confirmed and put the correct payment up
                 }
                 ; Customer still needs to do do the final/2nd confirmation
                 else
@@ -346,7 +357,7 @@ WatchChatLog()
                 Send {Space}%tradeTotal%pd, then confirm trade plz{Enter}
             }
         }
-        ; if 1 or more items requested but customer has not confirmed
+        ; if 1 or more items requested but customer has not confirmed.  COULD PROBABLY GET RID OF THE VerifyScreen() call
         else if ( requestedItemIndexes.Length() > 0 and  !VerifyScreen( "TradeImages\customerConfirmed.PNG", 1500 ) )
         {
             ; I COULD AND MIGHT CHECK TO SEE IF THE PDS ARE IN THE TRADE WINDOW 
@@ -743,35 +754,51 @@ GetTradeTotal( requestedInventory )
 }
 
 
-; Checks screen to verify the correct payment is in the trade window
+; Checks screen to verify the correct payment is in the trade window.  WILL NOT ACCEPT OVER PAYMENT
 IsPaymentCorrect( totalCost )
 {
     customerPay := 0
-    position1 := 
-    ; I NEED TO FIGURE OUT WHAT IS POS 1, 2 and 3 of the customers window
+    ; Looks like the background is different for all 3 positions, position 3 will scroll down and look different if there is 4 or more items in the trade window
+    ; I CAN PROBABLY USE THE SAME xNumber pic for all positions as long as they are same color and I keep the pic small (pos3 has markings close by)
     ; FOR NOW I will only implement POS 1 and pds 
 
-    ; if theirs photon drops in the first position
-    if ( VerifyImageAt( position1 ) )
-    {
+    ; CUSTOMERS TRADE OFFER WINDOW POSITIONS
+    offerWindowPositions := [ 30, 300, 350, 370 ]
+    amountPos1 := [ 315, 300, 350, 325 ] 
+    amountPos2 := [ 315, 315, 350, 350 ]
+    amountPos3 := [ 315, 335, 350, 370 ]
 
+
+    ; if there's photon drops in the first position
+    if ( VerifyImageInCustomerOffer( offerWindowPositions, "TradeImages\photonDropPos1.png", 2000 ) )
+    {
+        xAmountImage := "TradeImages\x" totalCost "Rare.png"
+        if ( VerifyImageInCustomerOffer( amountPos1, xAmountImage, 2000 ) )
+        {
+            customerPay += totalCost
+        }
     }
+    ; check to make sure there is nothing in the second trade offer position
+    ; accepting unacknowledged items will throw the script off
+    if ( !VerifyImageInCustomerOffer( offerWindowPositions, "TradeImages\emptyPos2.png", 2000 ) )
+    {
+        ; set it back to 0 if there is unexpected item offers in the window
+        customerPay := 0
+    }
+    return customerPay == totalCost
 }
 
 
-; Verify that the image is at the specified position
-VerifyImageAt(  position, filePath, searchTime )
+; Verify that the image is in the specified positions
+VerifyImageInCustomerOffer( positions, filePath, searchTime )
 {
-    /* 
-    ; I SHOULD ONLY NEED THE START POSITION TO FIND THE IMAGES IN THE CORRECT POSITION
-    ; Otherwise if I need the end point and I know the pictures dimensions
-    ;   then the below will help
-    xSize := ; THE PICTURES WIDTH
-    xEnd := xStart + xSize
+    ; starting corner for image searching
+    x1 := positions[1]
+    y1 := positions[2]
 
-    ySize := ; THE PICTURES HEIGHT
-    yEnd := yStart + ySize
-    */
+    ; ending corner for image searching
+    x2 := positions[3]
+    y2 := positions[4]
 
     imageFound := False
     searchTimer := A_TickCount
@@ -780,7 +807,7 @@ VerifyImageAt(  position, filePath, searchTime )
     { 
 
         ; ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *200 %filePath%
-        ImageSearch, , , position, A_ScreenWidth, A_ScreenHeight *125 %filePath%
+        ImageSearch, , , x1, y1, x2, y2, *125 %filePath%
         if (ErrorLevel = 2)
             MsgBox Could not conduct the search for %filePath%
         else if (ErrorLevel = 1)
@@ -797,11 +824,20 @@ IsMessageInLog( msg, timeSaid )
 {
     foundInTime := False
     chatLog := GetChatAsArray()
-    saidWithinTime := SaidInThisTrade( chatLog, timeSaid )
+    saidWithinTime := SaidRecentlyInLog( chatLog, timeSaid )
+    /* DELETE THIS COMMENT AFTER TESTING IS FINISHED
+    MessageArray( saidWithinTime )
+    test := StrLen(saidWithinTime[ 1 ])
+    msgTest := StrLen(msg)
+    MsgBox said in log length %test%  msg length %msgTest%
+    */
     if ( saidWithinTime )
     {
         Loop % saidWithinTime.Length() {
-            if ( saidWithinTime == msg ) 
+            ; it seems that the strings returned from the chatlog have an extra space added to them
+            ; HAVE ONLY TESTED WITH "Trade me txt" so far
+            logText := SubStr( saidWithinTime[ A_Index ], 1, -1 )
+            if ( msg == logText ) 
             {
                 foundInTime := True
             }
@@ -812,7 +848,7 @@ IsMessageInLog( msg, timeSaid )
 
 
 ; Was message said in X time 
-SaidInThisTrade( log, timeSaid )
+SaidRecentlyInLog( log, timeSaid )
 {
     saidInTimeLine := []
     Loop % log.Length() {
