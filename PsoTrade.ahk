@@ -29,6 +29,18 @@
 ;               ONLY TESTED VARIATIONS OF 25
 ;
 ;
+; In the future I may want to add a check to see if the customer is final confirmed with the wrong payment offered
+;   in the case of the above being true, It would cancel confirmation
+;       allowing the other player to be able to adjust their payment without having to leave/rejoin the game
+;
+;
+; their is risk of the inventory desyncing 
+;   Ender said "This game is old and almost everything is client side and the server just tries to match what clients are doing with tons of sanity checks. Inventory desync seems to happen for no reason sometimes, probably obscure client bugs given how rare."
+;   if it happens the customer will not necessarily see the same items as the client the script is running on
+;   I would guess it's most likely/only possible to happen when things change in the inventory or the inventory is loaded ( joining game/changing areas )
+;       if my above guess is correct that could be manageable otherwise it could be risky to sell high value items
+;
+;
 ; WHEN ADDING IN the fail saves, I should check to make sure the player joining window is not displayed?
 ;   SHOULD PREVENT trying to repeat actions while no inputs are accepted
 ;   IF ANOTHER PLAYER IS NOT JOINING, lag should be the only issue for inputs/macros messing up
@@ -44,18 +56,17 @@
 ;           using A_TickCount becomes unstable on slow machines ( times are often off by varying amounts sometimes drastic )
 ;       
 ;
-;   Initial testing/notes of latest additions :
-;       X correctly cancel out of the trade window,  HandleTradeCancel()
-;           seems to work just fine when other player cancels as it recursively calls itself
-;       X check if other player left game/ trade window.  If so break out of WatchChatLog()
-;           the same image of the other player cancelling the trade is shown, HandleTradeCancel() is called and takes care of it
+;   TESTED the 5 min timeout inside of WatchChatLog() make sure it properly breaks out of it's loop and the trade no matter which menu it's in
+;       EscAndCancelTrade() Seems to exit out of the trade from any window
 ;
-;       X check if the message that the script tried to relay to the customer made it to the chat log, IsMessageInLog( msg, timeSaid )
-;           seems to work fine after some adjustments.  HAVE ONLY IMPLEMENTED IT INSIDE TradeMeText()
 ;
-;       X Make is IsPaymentCorrect( totalCost ) CHECK FOR CORRECT PAYMENTS IN THEIR TRADE OFFER WINDOW ONLY
-;           X check if other player has paid the correct amount and confirmed the trade 
-;               currently only checks for photon drops in the 1st trade offer position
+;   STILL NEED TO ADD the image searches when removing items from the trade window ( to verify it only leaves the requested items )
+;       I STILL NEED TO TAKE THE IMAGES FOR THE SEARCH AS WELL
+;
+;
+;   STILL NEED TO adjust the inventory after a trade completes
+;       at that point I will also need to implement changes to not add the currency from my inventory to the trade window
+;
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
@@ -83,8 +94,9 @@ global g_timeItemsShown := 0
 
 ^t:: ; Ctrl + T - Test
     ;offerWindowPositions := [ 30, 300, 350, 370 ]
-    ;test :=  VerifyImageInCustomerOffer( offerWindowPositions, "TradeImages\photonDropPos1.png", 2000 )
+    ;test := VerifyScreen( "TradeImages\cancelExchange.PNG", 500 )
     ;MsgBox %test%
+    EscAndCancelTrade()
     return
 
 
@@ -212,10 +224,7 @@ ShowItems()
 {
     Loop % ( g_inventory.Length() * 2 ) {
         Send {Enter}
-        ; if I add in one extra Send "{Enter}" and check on the final iteration of the loop for the noItem.png or check for the currency that should be inventory
-        ;   It would verify that all items are displayed/in trade and in order ( because it was just sending the Enter key ) 
-        ; Would need to add a Send "{Backspace}" after seeing noItem.png
-        ;   then verify that it's back in the trade menu with, VerifyScreen( "TradeImages\addItem.png" )
+        ; WILL EVENTUALLY ADD IMAGE SEARCHES TO VERIFY ALL ITEMS ARE SHOWN IN MY TRADE WINDOW 
     }
 }
 
@@ -282,7 +291,7 @@ WatchChatLog()
     ; keep track of indexes that were requested in the below while loop
     requestedItemIndexes := []
 
-    ; set to infinitely loop. breaks loop inside if trade lasts 5 minutes, or customer cancels 
+    ; set to infinitely loop. breaks loop inside if trade lasts 5 minutes, customer cancels, or the trade is completed. 
     while ( 0 != 1 )
     {
         tradeTotal := GetTradeTotal( requestedItemIndexes )
@@ -301,11 +310,21 @@ WatchChatLog()
         ; trade has lasted longer than 5 minutes (300 = 5mins)
         else if ( TradeTimer( g_timeItemsShown ) > 300 )
         {
-            ; FIGURE OUT WHICH MENU IT'S CURRENTLY IN 
+            ; SHOULD CONSIDER ADDING A MESSAGE TO LET CUSTOMER KNOW TRADE IS BEING CANCELED
 
-            ; NAVIGATE TO AND SELECT Tell CANCEL TRADE
-            ;   I think backspacing/Esc will always get you to the "cancel exchange" confirmation menu.  Unless you have already selected the final confirmation.
+            ; NAVIGATE TO AND SELECT CANCEL TRADE
+            ;   I think backspacing/Esc will always get you to the "cancel exchange" confirmation menu.  Unless you have already selected the final confirmation. 
+            ;   Also Esc will not exit out of the cancel exchange menu
+            EscAndCancelTrade()
 
+            ; exit loop
+            Break
+        }
+        ; trade is completed
+        else if ( VerifyScreen( "TradeImages\itemsExchanged.PNG", 1500 ) )
+        {
+            ; exit out of the trade finished menu and say TY
+            HandleTradeFinish()
             ; exit loop
             Break
         }
@@ -325,11 +344,23 @@ WatchChatLog()
             GiveInstructions()
         }
         */
-        ; should only go into this if statement after items have been requested and left/added to trade one or more times
+        ; should only go into this if statement after items have been requested and left/added to trade
         else if ( requestedItemIndexes.Length() > 0 and !VerifyScreen( "TradeImages\my1stConfirm.PNG", 1500 ) )
         {
-            ; should navigate to the first trade confirm and select it
-            InitialTradeConfirm()
+            ; if script is in the purpose menu
+            if ( VerifyScreen( "TradeImages\purposeMenu.png", 500 ) )
+            {
+                ; should navigate to the first trade confirm and select it
+                InitialTradeConfirm()
+            }
+            ; double check that it's not in the purpose menu
+            else if ( !VerifyScreen( "TradeImages\purposeMenu.png", 500 ) )
+            {
+                ; SHOULD POSSIBLY ADD A IMAGE SEARCH for a chunk of the menu that's only visible during a trade 
+                ; THE IMAGE WOULD HAVE TO BE AVAILABLE IN ALL TRADE MENUS and will probably require window cordinates 
+                ; I ASSUME it will be a chunk of generic red menu 
+                Send {Esc}
+            }
         }
         ; if customer has confirmed the 1st time or final time and 1 or more items have been requested
         ;  ( only requested items should be in the trade window )
@@ -338,11 +369,14 @@ WatchChatLog()
             ; Check if customer has put the appropriate payment into the trade window
             if ( IsPaymentCorrect( tradeTotal ) )
             {
-                MsgBox correct payment in window
                 ; Verify the customer has selected the final confirmed 
                 if ( VerifyScreen( "TradeImages\customerFinalConfirmed.PNG", 1500 ) )
                 {
-                    MsgBox customer has confirmed and put the correct payment up
+                    ;MsgBox customer has confirmed and put the correct payment up
+
+                    ; Navigate to and select the final trade confirmation
+                    FinalTradeConfirmation()
+                    SelectFinalYes()
                 }
                 ; Customer still needs to do do the final/2nd confirmation
                 else
@@ -368,6 +402,30 @@ WatchChatLog()
 }
 
 
+; Send the Escape keep until asked yes/no during cancel exchange menu
+EscAndCancelTrade()
+{
+    if ( VerifyScreen( "TradeImages\cancelExchange.PNG", 700 ) ) ; if cancel exchange menu is on screen
+    {
+        if ( VerifyScreen( "TradeImages\yes.png", 700 ) ) ; if yes is highlighted
+        {
+            Send {Enter}
+        }
+        else 
+        {
+            Send {Up} ; no should be highlighted, send up to highlight yes
+            EscAndCancelTrade()
+        }
+    }
+    else
+    {
+        Send {Esc}
+        Sleep, 500 ; without this sleep it seems impossible for the function to see cancelExchange.png after recalling itself, sleep time could be lowered???
+        EscAndCancelTrade()
+    }
+}
+
+
 ; Makes sure to exit out of the cancel pop up, cancel pop up is triggered by customers ONLY???
 HandleTradeCancel()
 {
@@ -389,6 +447,31 @@ HandleTradeCancel()
     {
         ; tell the customer thanks for looking
         Send {Space}TY for looking :){Enter}
+    }
+}
+
+
+; Makes sure to exit out of the trade finished menu.  Only displayed after a trade is completed
+HandleTradeFinish()
+{
+    ; double check that the trade trade finished menu is present
+    if ( VerifyScreen( "TradeImages\itemsExchanged.png", 500 ) )
+    {
+        ; exit out of the trade finished menu.
+        Send {Enter}
+    }
+    ; if the trade finished menu is still present (should only happen when the previous enter did not register)
+    if ( VerifyScreen( "TradeImages\itemsExchanged.png", 1000 ) )
+    {
+        ; recursively call itself until the trade is cancelled
+        HandleTradeFinish()
+    }
+    ; SHOULD CONSIDER LOOKING FOR A IMAGE THAT IS FOUND ONLY when it's not in a trade
+    ; or simply check to make sure that itemsExchanged.png can NOT be found
+    else
+    {
+        ; tell the customer TY
+        Send {Space}TY :){Enter}
     }
 }
 
@@ -715,6 +798,7 @@ InitialTradeConfirm()
 FindPurposePos()
 {
     searchTime := 400
+
     if ( VerifyScreen( "TradeImages\addItem.png", searchTime ) )
     {
         return 1
@@ -739,6 +823,77 @@ FindPurposePos()
     {
         ; if it didn't match any of those images
         FindPurposePos()
+    }
+}
+
+
+; Selects the final yes after the final confirmation was selected
+SelectFinalYes()
+{
+    if ( VerifyScreen( "TradeImages\bothConfirmed.png", 1000 ) )
+    {
+        Send {Up} ; pressing up in this menu will not reset to the bottom selection. 
+        if ( VerifyScreen( "TradeImages\yes.png", 1000 ) )
+        {
+            Send {Enter}
+        }
+    }
+    else
+    {
+        SelectFinalYes() ; recursively call itself in the chance that it didn't find the bothConfirmed.png in time
+    }
+}
+
+
+; selects the final trade confirmation
+FinalTradeConfirmation()
+{
+    currentPos := FindConfirmedPos()
+    ; if Final Confirmation is highlighted 
+    if ( currentPos == 3 )
+    {
+        Send {Enter}
+    }
+    else if ( currentPos == 4 )
+    {
+        Send {Up}
+        FinalTradeConfirmation()
+    }
+    else 
+    {
+        Loop % ( 3 - currentPos ) {
+            Send {Down}
+        }
+        FinalTradeConfirmation()
+    }
+}
+
+
+; Finds current position of the "Confirmed" menu returns 1 - 4
+FindConfirmedPos()
+{
+    searchTime := 400
+
+    if ( VerifyScreen( "TradeImages\confirmedVerifyItems.png", searchTime ) )
+    {
+        return 1
+    }
+    else if ( VerifyScreen( "TradeImages\cancelConfirmation.png", searchTime ) )
+    {
+        return 2
+    }
+    else if ( VerifyScreen( "TradeImages\finalConfirmation.png", searchTime ) )
+    {
+        return 3
+    }
+    else if ( VerifyScreen( "TradeImages\cancelTrade.png", searchTime ) )
+    {
+        return 4
+    }
+    else 
+    {
+        ; if it didn't match any of the above images
+        FindConfirmedPos()
     }
 }
 
