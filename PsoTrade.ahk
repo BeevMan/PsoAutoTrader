@@ -1,4 +1,4 @@
-﻿; Need to figure out how to use OCR and find the best place to use it/ where it matches best
+﻿; X Need to figure out how to use OCR and find the best place to use it/ where it matches best
 ;     I should only try to implement this if people decide to try to grieve my shop script???
 ;     It works fairly well to retrieve names but I would have to add multiple languages and that may or may not be worth it???
 ;     If I do use it I should allow it to fuzzy match names???
@@ -7,12 +7,20 @@
 ;
 ; 
 ; I could make a variable that will store the guildcard of a player and apply the discount for buying multiple items in seperate purchases
-;   Would mostly be useful once I can accept and bank meseta 
+;   Would mostly be useful if/once I can accept and bank meseta 
 ;
 ;
 ; Should be able to accept up to 3 different currencies at a time
 ;     based on the background of the trade window, anymore than 3 and I might have to consider adding the slider into images which = a headache
+;       the slider imagery is required for checking to make sure the correct items were removed from the trade window
 ;     if I accept more then 3 at a time, the 3rd position item images will have to be taken twice as it slides down with 3+ items
+;     currently only accepting photon drops as currency, just adding the GetTradeTotal() to g_photonDrops to keep track
+;       when/if it accepts multiple currencies, it will have to change when and how it stores the currencies
+;
+;
+; SHOULD ADD A CHECK for currencies in the inventory and stackable items when the script parses the inventory txt file
+;   script is currently not capable of trading stackable items
+;   currency that is being accepted should not also be sold at this time
 ;
 ;
 ; WILL NEED TO MAKE SURE currency images are taken at the same position ( and are the same size??? position alone should be fine)
@@ -37,8 +45,8 @@
 ; their is risk of the inventory desyncing 
 ;   Ender said "This game is old and almost everything is client side and the server just tries to match what clients are doing with tons of sanity checks. Inventory desync seems to happen for no reason sometimes, probably obscure client bugs given how rare."
 ;   if it happens the customer will not necessarily see the same items as the client the script is running on
-;   I would guess it's most likely/only possible to happen when things change in the inventory or the inventory is loaded ( joining game/changing areas )
-;       if my above guess is correct that could be manageable otherwise it could be risky to sell high value items
+;   I would guess it's most likely/only possible to happen when things change in the inventory or the inventory is loaded??? ( joining game/changing areas )
+;       if my above guess is correct that could be manageable otherwise it could be risky to sell high value items??? or attempt banking ??? :(
 ;
 ;
 ; WHEN ADDING IN the fail saves, I should check to make sure the player joining window is not displayed?
@@ -46,26 +54,64 @@
 ;   IF ANOTHER PLAYER IS NOT JOINING, lag should be the only issue for inputs/macros messing up
 ;
 ;
+; I NEED TO DECIDE HOW TO SAFELY MAKE THE SCRIPT CHAT IN GAME ( verify chat has been said, it's not still in chat input, and the chats end/Send, {Enter} was used to send the chat )
 ; I NEED TO DECIDE WHAT TO DO WHEN A msg IS NOT FOUND using IsMessageInLog()
 ;   I may want to repeat the instructions or just make sure it's not still trying to talk by escaping multiple times??
 ;       escaping/backspacing during a trade at worse will end up in the "cancel exchange" confirmation menu
+;   ImageSearching seems to do a good job at finding chatStart.PNG and greenChat.PNG during a trade
+;       greenChat.PNG requires *1 transparency on the original machine during the image search to match in multiple spots
+;       which can be used during the trade to confirm that the chat input is ready to begin and that there has been 1 input or more in the chat
+;       I SHOULD MAKE Send {Space} recursively send in a trade until chatStart.PNG, cancelled.PNG, or greenChat.PNG is on screen??? THIS COULD POSSIBLY SOLVE INTERUPTION ISSUES WHILE PPL ARE JOINING MID CHAT
+;       I SHOULD MAKE Send {Enter} recursively send in a trade until cancelled.PNG, or greenChat.PNG is on screen??? similar to the above
+;           COULD THEN check that the chat made it into the chat log
+;               currently has to be said perfectly, ???could change to fuzzy search for the string or simply check that the scripts character said something recently???
+;   While in trade,
+;       I may want to rely on the above recursive chat starting/ending idea for mid trade chat
+;       ??? if I do the above it should be able to find it's way in WatchChatLog() ???
+;           OLD NOTE may be irrelevant: check to make sure they don't leave the trade if i'm trying to resend msg, if so:
+;               cancelled.PNG will be on screen UNLESS the Send, {Enter} for the msg gets rid of 
+;   While NOT in a trade, if the message is not found recently in the chatlog:
+;       then it should be assumed:
+;           the chat input is still up, which could stop trade offers from appearing
+;           or the chat input was never started and it could possibly hit enter on a trade offer
+;               could get stuck in a trade window at this point ( small possibility ) TO PREVENT THIS I COULD:
+;                   check for the redMenu.PNG in the j hotkey while loop, if found it would simply exit out of the trade menu??? as it's not suppose to be in there
+;           I THINK SENDING {Esc} AT WORST would turn down a trade offer/exit chat input if it's still up
 ;
 ;
-;   I have not fully tested my timer functions/math ( STILL HAVE NOT TESTED TO SEE IF IT TIMES OUT AT 5 MINS )
+; FIXED THIS by changing the while loops condition in WatchChatLog()
+;   If the customer leaves before, the script can properly send the text telling them to tell me the index they want:
+;       then it will get stuck image searching until it hits AHK recursion limit once it times itself out at the set time in WatchChatLog()/calling EscAndCancelTrade()
+;       Send {Enter} , from trying to tell the customer instructions bypasses the chance to see the trade cancelled menu
+;       When the trade cancelled menu pops up it's like escaping from chat ( deletes your current chat and gets you out of chat input )
+;   
+;
+;   I have not fully tested my timer functions/math ( seems to time out at the set time )
+;       Will need to decide how to handle retrieving the chat log and when, if the trade takes place during a date change on client machine 
 ;       I need to look further into AHK's native time methods
 ;           using A_TickCount becomes unstable on slow machines ( times are often off by varying amounts sometimes drastic )
 ;       
 ;
-;   TESTED the 5 min timeout inside of WatchChatLog() make sure it properly breaks out of it's loop and the trade no matter which menu it's in
-;       EscAndCancelTrade() Seems to exit out of the trade from any window
-;
-;
-;   STILL NEED TO ADD the image searches when removing items from the trade window ( to verify it only leaves the requested items )
+;   STILL NEED TO ADD the image searches when showing/removing items from the trade window ( to verify it only leaves the requested items )
 ;       I STILL NEED TO TAKE THE IMAGES FOR THE SEARCH AS WELL
+;       WHEN ADDING ITEMS TO TRADE WINDOW the last 4 do not include the slider
+;           to verify all items were added to the trade window:
+;               I COULD just check the add item window for no items or whatever currencies it expects to have
+;                   the above should require a lot less imagery and script execution time compared to using images to verify each item is added one by one
+;       WHEN REMOVING ITEMS FROM THE TRADE WINDOW the last 3 items do not inlcude the slider "Cancel candidate" menu
+;           this will use the same slider images that could be used in the "verify items" menu
 ;
 ;
-;   STILL NEED TO adjust the inventory after a trade completes
-;       at that point I will also need to implement changes to not add the currency from my inventory to the trade window
+; X I ADDED while loops in to some of my functions that check for the redMenu.PNG that is seen in trade windows
+;       should help prevent unwanted/unexpected input
+;
+;
+;   adjusting the inventory after a trade completes: ( g_inventory and g_inventory )
+;       X RemoveSoldItems(), Seems to work just fine with 1 item sales. ( I need to take more xNumber images to test multiple item sales )
+;       X at that point I will also need to implement changes to not add the currency from my inventory to the trade window
+;           X if I store the expected currencies in a different variable than g_inventory it should not add the currencies to the window
+;               currently only accepting photon drops as currency, just adding the GetTradeTotal() to g_photonDrops
+;                   when/if it accepts multiple currencies, it will have to change when and how it stores the currencies
 ;
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
@@ -79,6 +125,7 @@ SetKeyDelay, 210, 80   ; SetKeyDelay, 150, 70  1st parameter is delay between ke
 ; CHANGE THIS TO PSO's DIRECTORY
 global g_psoDirectory := "C:\Program Files\EphineaPSO"
 
+; g_inventory DOES NOT store/track accepted/incoming currencies, as it does not want to add it to the trade window
 global g_inventory := GetInventory()
 MessageArray( g_inventory )
 global g_itemPrices := []
@@ -87,25 +134,38 @@ Loop % g_inventory.Length() {
     }
 
 global g_timeItemsShown := 0
+global g_photonDrops := 0
+
+; rough position of a blank piece of red menu that should only be blank during a trade
+global g_emptyMenuPosition := [ 45, 60, 145, 110 ]
 
 
 ^p:: Pause  ; Ctrl + P - Pauses script.
      
 
-^t:: ; Ctrl + T - Test
-    ;offerWindowPositions := [ 30, 300, 350, 370 ]
-    ;test := VerifyScreen( "TradeImages\cancelExchange.PNG", 500 )
-    ;MsgBox %test%
-    EscAndCancelTrade()
+t:: ; Ctrl + T - Test
+    test := VerifyScreen( "TradeImages\greenChat.PNG", 2500 )
+
+    ;emptyMenuPosition := [ 45, 60, 145, 110 ]
+    ; checks for a blank piece of the red menu that should only be blank in this position during a trade???
+    ;test := VerifyImageInPosition( emptyMenuPosition, "TradeImages\redMenu.PNG", 500 )
+    ; this will not be true if
+    ; not in a trade
+    ; trade is cancelled/finished ( cancelled.PNG or itemsExchanged.PNG is present )
+    MsgBox %test%
     return
 
 
 ^q:: ; Ctrl + Q - Display itemsInventory 
+    /*
     displayInventory := ""
     Loop % g_inventory.Length() {
         displayInventory := displayInventory "`n" g_inventory[ A_Index ]
     } 
     MsgBox  itemsInventory, starting at index 1 %displayInventory%
+    */
+    MessageArray( g_inventory )
+    MessageArray( g_itemPrices )
     return
 
 ^r::reload  ; Ctrl + R - Restarts script.
@@ -134,11 +194,10 @@ global g_timeItemsShown := 0
                 {
                     ShowItems() ; adds all items from your inventory to the trade, allowing other player to see the goods.
                     g_timeItemsShown := TimeInSecs( A_Hour, A_Min, A_Sec )
-                    GiveInstructions() ; tell other player/s to tell me the index or stats/%s of the item they want to buy.
-                    ; currentTraderName should only be needed if people start to grieve my shop script I.E intentionally try to mess it up by saying random numbers and or stats while it's trading with others
+                    GiveInstructions() ; tell other player/s to tell me the index of the item/s they want to buy.
+                    ; currentTraderName should only be needed if people start to grieve my shop script I.E intentionally try to mess it up by saying random index/s while it's trading with others
                     ; currentTraderName := WindowOCR(40,280,120,15, "Ephinea: Phantasy Star Online Blue Burst") ; using Optical Character Recognition (OCR), get current tradee's username
-                
-                    ;
+
                     ; watch chat log for trade instructions for up to 5 minutes? while also checking to make sure trade is not cancelled OR CONFIRMED???
                     ;   will also call to a function that will leave only the requested items in the trade ??? after tradee has requested it/them.
                     WatchChatLog()
@@ -203,7 +262,7 @@ VerifyScreen( filePath, searchTime )
     {
         ; using *200 color variations allows my laptop to find the initial tradeproposal 
         ; ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *200 %filePath%
-        ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *125 %filePath%
+        ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *1 %filePath%
         if (ErrorLevel = 2)
             MsgBox Could not conduct the search for %filePath%
         else if (ErrorLevel = 1)
@@ -223,8 +282,8 @@ VerifyScreen( filePath, searchTime )
 ShowItems()
 {
     Loop % ( g_inventory.Length() * 2 ) {
-        Send {Enter}
-        ; WILL EVENTUALLY ADD IMAGE SEARCHES TO VERIFY ALL ITEMS ARE SHOWN IN MY TRADE WINDOW 
+        EnterIfInTrade()
+        ; WILL EVENTUALLY ADD IMAGE SEARCHES TO VERIFY no items or only currency is left in my inventory ???
     }
 }
 
@@ -242,19 +301,13 @@ TradeMeText()
     ; if the message was not said recently
     if ( !IsMessageInLog( message, textTimeStamp ) ) 
     {
-        MsgBox did not say the trade me txt recently
+        ;MsgBox did not say the trade me txt recently
         ; Will need to decide how I will want to handle the text not being in the log
         ; I suspect the main reason it will not have the message in the chat recently is because of players joining
         ; SHOULD I JUST MAKE SURE ITS NOT TRYING TO TALK STILL?? send escape or backspace to make sure its not still sending a message?
         ; THERE SHOULD BE NO HARM IN USING Send {Space} , except that it should bring up the chat input if it's not already up
         ; SHOULD I CHECK IF THE PLAYER IS JOINING WINDOW IS UP?
     }
-    /* REDUNDANT CHECK   DELETE AFTER TESTING
-    else if ( IsMessageInLog( message, textTimeStamp ) ) ; REMOVE AFTER TESTING
-    {
-        MsgBox message was found in the chatlog close to time it should've been said
-    }
-    */
 }
 
 
@@ -291,24 +344,16 @@ WatchChatLog()
     ; keep track of indexes that were requested in the below while loop
     requestedItemIndexes := []
 
-    ; set to infinitely loop. breaks loop inside if trade lasts 5 minutes, customer cancels, or the trade is completed. 
-    while ( 0 != 1 )
+    ; while in trade menu 
+    while ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
     {
         tradeTotal := GetTradeTotal( requestedItemIndexes )
 
         ; array of index numbers found in the current chat log
         requestedIndex := FindRequestedIndexes()
 
-        ; if the customer has cancelled the trade or left the game
-        if ( VerifyScreen( "TradeImages\cancelled.PNG", 1500 ) )
-        {
-            ; exit out of the cancel pop up and tell customer thanks for looking
-            HandleTradeCancel()
-            ; exit loop
-            Break
-        }
         ; trade has lasted longer than 5 minutes (300 = 5mins)
-        else if ( TradeTimer( g_timeItemsShown ) > 300 )
+        if ( TradeTimer( g_timeItemsShown ) > 300 )
         {
             ; SHOULD CONSIDER ADDING A MESSAGE TO LET CUSTOMER KNOW TRADE IS BEING CANCELED
 
@@ -317,16 +362,8 @@ WatchChatLog()
             ;   Also Esc will not exit out of the cancel exchange menu
             EscAndCancelTrade()
 
-            ; exit loop
-            Break
-        }
-        ; trade is completed
-        else if ( VerifyScreen( "TradeImages\itemsExchanged.PNG", 1500 ) )
-        {
-            ; exit out of the trade finished menu and say TY
-            HandleTradeFinish()
-            ; exit loop
-            Break
+            ; Make it jump to the next while() check.  This will make sure it made it out of the trade menu.
+            Continue
         }
 
 
@@ -356,9 +393,7 @@ WatchChatLog()
             ; double check that it's not in the purpose menu
             else if ( !VerifyScreen( "TradeImages\purposeMenu.png", 500 ) )
             {
-                ; SHOULD POSSIBLY ADD A IMAGE SEARCH for a chunk of the menu that's only visible during a trade 
-                ; THE IMAGE WOULD HAVE TO BE AVAILABLE IN ALL TRADE MENUS and will probably require window cordinates 
-                ; I ASSUME it will be a chunk of generic red menu 
+                ; Send {Esc} until it's in the purpose menu
                 Send {Esc}
             }
         }
@@ -391,37 +426,89 @@ WatchChatLog()
                 Send {Space}%tradeTotal%pd, then confirm trade plz{Enter}
             }
         }
-        ; if 1 or more items requested but customer has not confirmed.  COULD PROBABLY GET RID OF THE VerifyScreen() call
+        ; if 1 or more items requested but customer has not confirmed.  COULD MAYBE GET RID OF THE VerifyScreen() call
         else if ( requestedItemIndexes.Length() > 0 and  !VerifyScreen( "TradeImages\customerConfirmed.PNG", 1500 ) )
         {
             ; I COULD AND MIGHT CHECK TO SEE IF THE PDS ARE IN THE TRADE WINDOW 
             ; THEN RESPOND TO CUSTOMER APPROPRIATELY 
             Send {Space}%tradeTotal%pd, then confirm plz{Enter}
+            Sleep 3000
         }
     }
+
+    ; the images commented below can all be found WHILE SOMEBODY IS JOINING THE GAME ( cancelled.PNG is cutting it close ???might not be found while someone joins??? !!!NEED TO CHECK!!! )
+    ; tradeWindow.PNG is displayed when either of the following images is on the screen: cancelled.PNG, itemsExchanged.PNG
+
+    ; if the customer has cancelled the trade or left the game
+    if ( VerifyScreen( "TradeImages\cancelled.PNG", 2500 ) )
+    {
+        ; exit out of the cancel pop up and tell customer thanks for looking
+        HandleTradeCancel()
+    }
+    ; trade is completed
+    else if ( VerifyScreen( "TradeImages\itemsExchanged.PNG", 2500 ) )
+    {
+        ; adjust the inventory and price array
+        RemoveSoldItems( requestedItemIndexes )
+        ; currently only accept photon drops
+        g_photonDrops += tradeTotal
+
+        ; exit out of the trade finished menu and say TY
+        HandleTradeFinish()
+    }
+}
+
+
+; sort soldIndexes from greatest to least, then remove the sold index/s from g_inventory and g_itemPrices
+RemoveSoldItems( soldIndexes )
+{
+    ; reverse the array, It's already sorted least to greatest.  Array needs to be sorted this way in order to properly remove the indexes from g_inventory
+    soldIndexes := ReverseArray( soldIndexes )
+    Loop % soldIndexes.Length() {
+        g_inventory.RemoveAt( soldIndexes[ A_Index ] )
+        g_itemPrices.RemoveAt( soldIndexes[ A_Index ] )
+    }
+}
+
+
+; reverses array contents indexes
+ReverseArray( toRev )
+{
+    reversedArray := []
+    i := toRev.Length()
+    Loop % toRev.Length() {
+        reversedArray.Push( toRev[ i ] )
+        i--
+    }
+    return reversedArray
 }
 
 
 ; Send the Escape keep until asked yes/no during cancel exchange menu
 EscAndCancelTrade()
 {
-    if ( VerifyScreen( "TradeImages\cancelExchange.PNG", 700 ) ) ; if cancel exchange menu is on screen
+    ; while in trade menu 
+    while ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
     {
-        if ( VerifyScreen( "TradeImages\yes.png", 700 ) ) ; if yes is highlighted
+        if ( VerifyScreen( "TradeImages\cancelExchange.PNG", 700 ) ) ; if cancel exchange menu is on screen
         {
-            Send {Enter}
+            if ( VerifyScreen( "TradeImages\yes.png", 700 ) ) ; if yes is highlighted
+            {
+                EnterIfInTrade()
+            }
+            else 
+            {
+                Send {Up} ; no should be highlighted, send up to highlight yes
+                EscAndCancelTrade()
+            }
         }
-        else 
+        else
         {
-            Send {Up} ; no should be highlighted, send up to highlight yes
+            Send {Esc}
+            Sleep, 500 ; without this sleep it seems impossible for the function to see cancelExchange.png after recalling itself, sleep time could be lowered??? 
+            ; ??? or simply add the time to the search for cancelExchange.png ???
             EscAndCancelTrade()
         }
-    }
-    else
-    {
-        Send {Esc}
-        Sleep, 500 ; without this sleep it seems impossible for the function to see cancelExchange.png after recalling itself, sleep time could be lowered???
-        EscAndCancelTrade()
     }
 }
 
@@ -699,25 +786,28 @@ RemoveExcessItems( requestedItems )
     
 
     Loop % nonRequestedItems.Length() {
-        ; selects "Cancel Candidate"
-        Send {Enter}
+        ; while in trade menu 
+        while ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+        {
+            ; selects "Cancel Candidate"
+            EnterIfInTrade()
 
-        
-        if ( cancelPos == ( nonRequestedItems[ A_Index ] - removedCount ) )
-        {
-            ; removes unwanted item from trade menu
-            Send {Enter}
-        }
-        else 
-        {
-            ; THIS SEEMS TO WORK, have not fully tested yet or given it a full thought.
-            ; should hover/highlight the next unwanted item
-            Loop % ( ( nonRequestedItems[ A_Index ] - cancelPos ) - removedCount ) {
-                Send {Down}
-                cancelPos++
+            
+            if ( cancelPos == ( nonRequestedItems[ A_Index ] - removedCount ) )
+            {
+                ; removes unwanted item from trade menu
+                EnterIfInTrade()
             }
-            ; removes unwanted item from trade menu
-            Send {Enter}
+            else 
+            {
+                ; should hover/highlight the next unwanted item
+                Loop % ( ( nonRequestedItems[ A_Index ] - cancelPos ) - removedCount ) {
+                    Send {Down}
+                    cancelPos++
+                }
+                ; removes unwanted item from trade menu
+                EnterIfInTrade()
+            }
         }
     ; keep track of how many items have been removed from the trade
     removedCount++
@@ -729,27 +819,31 @@ RemoveExcessItems( requestedItems )
 ; hover/highlight "Cancel Candidate"
 HoverCancelCandidate()
 {
-    currentPos := FindPurposePos()
-    if ( currentPos == 2 )
+    ; while in trade menu 
+    while ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
     {
-        ; do nothing/exit function
-    }
-    else if ( currentPos == 1 )
-    {
-        Send {Down}
-        HoverCancelCandidate()
-    }
-    else if ( currentPos > 2 )
-    {
-        Loop % currentPos - 2 {
-            Send {Up}
+        currentPos := FindPurposePos()
+        if ( currentPos == 2 )
+        {
+            ; do nothing/exit function
         }
-        HoverCancelCandidate()
+        else if ( currentPos == 1 )
+        {
+            Send {Down}
+            HoverCancelCandidate()
+        }
+        else if ( currentPos > 2 )
+        {
+            Loop % currentPos - 2 {
+                Send {Up}
+            }
+            HoverCancelCandidate()
+        }
     }
 }
 
 
-; Returns items that were not requested
+; Returns indexes that were not requested
 GetNonRequested( requested )
 {
     notRequested := []
@@ -773,27 +867,31 @@ GetNonRequested( requested )
 ; selects the first confirmation in the trade
 InitialTradeConfirm()
 {
-    currentPos := FindPurposePos()
-    ; if confirmed is highlighted 
-    if ( currentPos == 4 )
+    while ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
     {
-        Send {Enter}
-    }
-    else if ( currentPos == 5 )
-    {
-        Send {Up}
-        InitialTradeConfirm()
-    }
-    else 
-    {
-        Loop % ( 4 - currentPos ) {
-            Send {Down}
+        currentPos := FindPurposePos()
+        ; if confirmed is highlighted 
+        if ( currentPos == 4 )
+        {
+            EnterIfInTrade()
         }
-        InitialTradeConfirm()
+        else if ( currentPos == 5 )
+        {
+            Send {Up}
+            InitialTradeConfirm()
+        }
+        else 
+        {
+            Loop % ( 4 - currentPos ) {
+                Send {Down}
+            }
+            InitialTradeConfirm()
+        }
     }
 }
 
 
+; SHOULD MAKE A FUNCTION that will find which menu it's in and use it in the else statement???
 ; Finds current position of the "Purpose" menu returns 1 - 5
 FindPurposePos()
 {
@@ -830,17 +928,21 @@ FindPurposePos()
 ; Selects the final yes after the final confirmation was selected
 SelectFinalYes()
 {
-    if ( VerifyScreen( "TradeImages\bothConfirmed.png", 1000 ) )
+    ; while in the trade menu
+    while ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
     {
-        Send {Up} ; pressing up in this menu will not reset to the bottom selection. 
-        if ( VerifyScreen( "TradeImages\yes.png", 1000 ) )
+        if ( VerifyScreen( "TradeImages\bothConfirmed.png", 1000 ) )
         {
-            Send {Enter}
+            Send {Up} ; pressing up in this menu will not reset to the bottom selection. 
+            if ( VerifyScreen( "TradeImages\yes.png", 1000 ) )
+            {
+                EnterIfInTrade()
+            }
         }
-    }
-    else
-    {
-        SelectFinalYes() ; recursively call itself in the chance that it didn't find the bothConfirmed.png in time
+        else
+        {
+            SelectFinalYes() ; recursively call itself in the chance that it didn't find the bothConfirmed.png in time
+        }
     }
 }
 
@@ -848,23 +950,27 @@ SelectFinalYes()
 ; selects the final trade confirmation
 FinalTradeConfirmation()
 {
-    currentPos := FindConfirmedPos()
-    ; if Final Confirmation is highlighted 
-    if ( currentPos == 3 )
+    ; while in the trade menu
+    while ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
     {
-        Send {Enter}
-    }
-    else if ( currentPos == 4 )
-    {
-        Send {Up}
-        FinalTradeConfirmation()
-    }
-    else 
-    {
-        Loop % ( 3 - currentPos ) {
-            Send {Down}
+        currentPos := FindConfirmedPos()
+        ; if Final Confirmation is highlighted 
+        if ( currentPos == 3 )
+        {
+            EnterIfInTrade()
         }
-        FinalTradeConfirmation()
+        else if ( currentPos == 4 )
+        {
+            Send {Up}
+            FinalTradeConfirmation()
+        }
+        else 
+        {
+            Loop % ( 3 - currentPos ) {
+                Send {Down}
+            }
+            FinalTradeConfirmation()
+        }
     }
 }
 
@@ -925,17 +1031,17 @@ IsPaymentCorrect( totalCost )
 
 
     ; if there's photon drops in the first position
-    if ( VerifyImageInCustomerOffer( offerWindowPositions, "TradeImages\photonDropPos1.png", 2000 ) )
+    if ( VerifyImageInPosition( offerWindowPositions, "TradeImages\photonDropPos1.png", 2000 ) )
     {
         xAmountImage := "TradeImages\x" totalCost "Rare.png"
-        if ( VerifyImageInCustomerOffer( amountPos1, xAmountImage, 2000 ) )
+        if ( VerifyImageInPosition( amountPos1, xAmountImage, 2000 ) )
         {
             customerPay += totalCost
         }
     }
     ; check to make sure there is nothing in the second trade offer position
     ; accepting unacknowledged items will throw the script off
-    if ( !VerifyImageInCustomerOffer( offerWindowPositions, "TradeImages\emptyPos2.png", 2000 ) )
+    if ( !VerifyImageInPosition( offerWindowPositions, "TradeImages\emptyPos2.png", 2000 ) )
     {
         ; set it back to 0 if there is unexpected item offers in the window
         customerPay := 0
@@ -945,7 +1051,7 @@ IsPaymentCorrect( totalCost )
 
 
 ; Verify that the image is in the specified positions
-VerifyImageInCustomerOffer( positions, filePath, searchTime )
+VerifyImageInPosition( positions, filePath, searchTime )
 {
     ; starting corner for image searching
     x1 := positions[1]
@@ -1021,4 +1127,14 @@ SaidRecentlyInLog( log, timeSaid )
         }
     }
     return saidInTimeLine
+}
+
+
+; Send {Enter} if in trade window
+EnterIfInTrade()
+{
+    if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+    {
+        Send {Enter}
+    }
 }
