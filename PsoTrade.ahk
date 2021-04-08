@@ -12,7 +12,7 @@
 ;
 ;
 ; Should be able to accept up to 3 different currencies at a time
-;     based on the background of the trade window, anymore than 3 and I might have to consider adding the slider into images which = a headache
+;     based on the background of the trade window, anymore than 3 and I might have to consider adding the slider images in to check for correct payment
 ;       the slider imagery is required for checking to make sure the correct items were removed from the trade window
 ;     if I accept more then 3 at a time, the 3rd position item images will have to be taken twice as it slides down with 3+ items
 ;     currently only accepting photon drops as currency, just adding the GetTradeTotal() to g_photonDrops to keep track
@@ -21,7 +21,7 @@
 ;
 ; SHOULD ADD A CHECK for currencies in the inventory and stackable items when the script parses the inventory txt file
 ;   script is currently not capable of trading stackable items
-;   currency that is being accepted should not also be sold at this time
+;   currency that is being accepted should not also be sold, at least at this time
 ;
 ;
 ; WILL NEED TO MAKE SURE currency images are taken at the same position ( and are the same size??? position alone should be fine)
@@ -70,8 +70,6 @@
 ;   While in trade,
 ;       I may want to rely on the above recursive chat starting/ending idea for mid trade chat
 ;       ??? if I do the above it should be able to find it's way in WatchChatLog() ???
-;           OLD NOTE may be irrelevant: check to make sure they don't leave the trade if i'm trying to resend msg, if so:
-;               cancelled.PNG will be on screen UNLESS the Send, {Enter} for the msg gets rid of 
 ;   While NOT in a trade, if the message is not found recently in the chatlog:
 ;       then it should be assumed:
 ;           the chat input is still up, which could stop trade offers from appearing
@@ -93,15 +91,11 @@
 ;       I STILL NEED TO TAKE THE IMAGES FOR THE SEARCH AS WELL
 ;       WHEN ADDING ITEMS TO TRADE WINDOW the last 4 do not include the slider
 ;           to verify all items were added to the trade window:
-;               I COULD just check the add item window for no items or whatever currencies it expects to have
+;               X Checks the add item window for no items or whatever currencies it expects to have ( in ShowItems() )
 ;                   the above should require a lot less imagery and script execution time compared to using images to verify each item is added one by one
-;       WHEN REMOVING ITEMS FROM THE TRADE WINDOW the last 3 items do not inlcude the slider "Cancel candidate" menu
+;       WHEN REMOVING ITEMS FROM THE TRADE WINDOW the last 3 items do not inlcude the slider in "Cancel candidate" menu
 ;           this will use the same slider images that could be used in the "verify items" menu
-;
-;
-; X I ADDED while loops/if statements in to some of my functions that check for the redMenu.PNG that is seen in trade windows
-;       should help prevent unwanted/unexpected input
-;
+;           implenent imageSearch inside of RemoveExcessItems()
 ;
 
 
@@ -309,7 +303,7 @@ ShowItems()
     else
     {
         ; SHOULD TELL CUSTOMER SOMETHING WENT WRONG AND THEN EscAndCancelTrade()
-
+        SayMsgInTrade( "Incorrect items, let's try again." )
         EscAndCancelTrade() ; assume not all items were added or the currencies were added as well and exit the trade
     }
 }
@@ -586,7 +580,6 @@ HandleTradeFinish()
         HandleTradeFinish()
     }
     ; SHOULD CONSIDER LOOKING FOR A IMAGE THAT IS FOUND ONLY when it's not in a trade
-    ; or simply check to make sure that itemsExchanged.png can NOT be found
     else
     {
         ; tell the customer TY
@@ -827,24 +820,78 @@ RemoveExcessItems( requestedItems )
             
             if ( cancelPos == ( nonRequestedItems[ A_Index ] - removedCount ) )
             {
-                ; removes unwanted item from trade menu
-                EnterIfInTrade()
+                ; Checks for the correct image and removes item if image found.  Otherwise chats and leaves trade
+                RemoveItem( cancelPos, itemsInTrade )
             }
             else 
             {
-                ; should hover/highlight the next unwanted item
+                ; hover/highlight the next unwanted item
                 Loop % ( ( nonRequestedItems[ A_Index ] - cancelPos ) - removedCount ) {
                     Send {Down}
                     cancelPos++
                 }
-                ; removes unwanted item from trade menu
-                EnterIfInTrade()
+                ; Checks for the correct image and removes item if image found.  Otherwise chats and leaves trade
+                RemoveItem( cancelPos, itemsInTrade )
             }
         }
     ; keep track of how many items have been removed from the trade
     removedCount++
     }
 
+}
+
+
+; Decides which image is needed to check in the ???cancel candidate menu???
+GetSliderImage( currentPos, itemsInTrade )
+{
+    ; when there is less than 3 itemsInTrade the slider is no longer available
+    if ( itemsInTrade <= 3 )
+    {
+        return "TradeImages\CancelVerifyImages\leftSide" currentPos ".PNG"
+    }
+    else
+    {
+        return "TradeImages\CancelVerifyImages\" currentPos "of" itemsInTrade ".PNG"
+    }
+}
+
+
+; Returns leftBarPosition or sliderPosition
+GetPosition( itemsInTrade )
+{
+    ; rough positions used for imageSearching
+    leftBarPosition := [ 20, 380, 50, 475 ]
+    sliderPosition := [ 335, 370, 350, 475 ]
+
+    if ( itemsInTrade <= 3 )
+    {
+        return leftBarPosition
+    }
+    else
+    {
+        return sliderPosition
+    }
+}
+
+
+; Removes individual item from the trade window
+RemoveItem( cancelPos, itemsInTrade )
+{
+    position := GetPosition( itemsInTrade )
+    sliderImage := GetSliderImage( cancelPos, itemsInTrade )
+
+    ; item to remove is highlighted
+    if ( VerifyImageInPosition( position, sliderImage, 3000 ) )
+    {
+        ; removes unwanted item from trade menu
+        EnterIfInTrade()
+    }
+    else
+    {
+        ; explain mistake and exit trade
+        SayMsgInTrade( "Let's try again. Wrong items left in trade" )
+        EscAndCancelTrade()
+    }
 }
 
 
@@ -1066,7 +1113,7 @@ IsPaymentCorrect( totalCost )
     ; if there's photon drops in the first position
     if ( VerifyImageInPosition( offerWindowPositions, "TradeImages\photonDropPos1.png", 2000 ) )
     {
-        xAmountImage := "TradeImages\x" totalCost "Rare.png"
+        xAmountImage := "TradeImages\xAmount\x" totalCost ".png"
         if ( VerifyImageInPosition( amountPos1, xAmountImage, 2000 ) )
         {
             customerPay += totalCost
