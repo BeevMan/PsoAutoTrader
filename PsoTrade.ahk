@@ -20,6 +20,8 @@
 ;
 ;
 ; SHOULD ADD A CHECK for currencies in the inventory and stackable items when the script parses the inventory txt file
+;   Script should require atleast one of each accepted currency at the end of it's inventory
+;       otherwise it could lead to vulnerabilities when it messes up in chat ( picking up dropped items )
 ;   script is currently not capable of trading stackable items
 ;   currency that is being accepted should not also be sold, at least at this time
 ;
@@ -43,11 +45,8 @@
 ;       allowing the other player to be able to adjust their payment without having to leave/rejoin the game
 ;
 ;
-; their is risk of the inventory desyncing 
+; Their is risk of the inventory desyncing 
 ;   Ender said "This game is old and almost everything is client side and the server just tries to match what clients are doing with tons of sanity checks. Inventory desync seems to happen for no reason sometimes, probably obscure client bugs given how rare."
-;   if it happens the customer will not necessarily see the same items as the client the script is running on
-;   I would guess it's most likely/only possible to happen when things change in the inventory or the inventory is loaded??? ( joining game/changing areas )
-;       if my above guess is correct that could be manageable otherwise it could be risky to sell high value items??? or attempt banking ??? :(
 ;
 ;
 ; WHEN ADDING IN the fail saves, I should check to make sure the player joining window is not displayed?
@@ -87,18 +86,54 @@
 ;           using A_TickCount becomes unstable on slow machines ( times are often off by varying amounts sometimes drastic )
 ;       
 ;
-;   STILL NEED TO ADD the image searches when showing/removing items from the trade window ( to verify it only leaves the requested items )
-;       I STILL NEED TO TAKE THE IMAGES FOR THE SEARCH AS WELL
+;   X ADDED the image searches when showing/removing items from the trade window ( to verify it only leaves the requested items )
+;       I STILL NEED TO TAKE THE IMAGES FOR THE SEARCH WITH INVENTORIES OF MORE THAN 5
 ;       WHEN ADDING ITEMS TO TRADE WINDOW the last 4 do not include the slider
 ;           to verify all items were added to the trade window:
 ;               X Checks the add item window for no items or whatever currencies it expects to have ( in ShowItems() )
 ;                   the above should require a lot less imagery and script execution time compared to using images to verify each item is added one by one
 ;       WHEN REMOVING ITEMS FROM THE TRADE WINDOW the last 3 items do not inlcude the slider in "Cancel candidate" menu
+;           THE FIRST TWO AND LAST TWO items being removed share the same slider pic on all sets above 3
+;               X I could check for the leftSide.PNG pic as well with those
+;               ???I could add the leftSide.PNG pic in for all of them???
+;               In my magFeed script I put the highlight in with the slider images
+;                   however I'm not sure I want to rule out the chance to sell stackable items in the future
 ;           this will use the same slider images that could be used in the "verify items" menu
-;           implenent imageSearch inside of RemoveExcessItems()
+;           X implement imageSearch inside of RemoveExcessItems()
+;           X Also need to add a check at the bottom of RemoveExcessItems() to ensure the proper item/s remain ( can only check pos of itemsInTrade )
+;               implemented IsFinalItemRemoved() at the bottom of RemoveExcessItems(), still need to test
+;               IF I DON'T CHECK HERE the last item that's getting removed could possibly remain in the trade offer
+;               
 ;
-
-
+; I should make IsPaymentCorrect() check if it's a floating point
+;   if it's a floting point it should round up to the nearest integer ( will allow people to sell items for fractions of a pd, 2:1 etc )
+;
+;
+; SayMsgInTrade() seems to be skipping the beginning of it's messages most the time or all the time???
+;   too much or little transparency in the checks for the start of chat seem to cause it?
+;
+;
+; leftSide images used when there is less then 3 itemsInTrade
+;   leftSide3rd.PNG needed when currentPos == 3 and there is 3 itemsInTrade
+; Or when it is the first two or last two itemsInTrade as they share the same slider image and need an additional image check to verify it is at the correct spot
+; leftSide1 matches incorrectly above *145
+; leftSide2 matches the 3rd item, *140, when there is 4 items in the inventory
+;    leftSide2.PNG matches 2nd item - 3rdToLast item, when there is 5 or more items in the inventory
+; leftSide3 matches for 2nd item, above *140, when there is 4 items in the inventory
+;    leftSide3.PNG matches 3rd item - 2ndToLast item, when there is 5 or more items in the inventory
+; leftSide4 matches incorrectly above *160  ( where imagery was taken ) ( old images had issues at *110 )
+;
+; When there is only 3 items in trade and the 3rd is highlighted leftSide4.PNG matches at *150???
+;
+;
+; VerifyScreen( filePath, searchTime ) and VerifyImageInPosition( positions, filePath, searchTime ) for imageSearching
+;
+;
+; PEOPLE CAN TRICK THE SCRIPT INTO PICKING UP ITEMS WHEN IT TRIES TO CHAT
+;   if the script starts with no pds at the end of the inventory it can be tricked into picking up items from chat mess ups if it has no currency/trades made
+; Script can also go off walking if chat input is not up and it's trying to input a message
+; Testing on crap pc, seemed to have to wait to timeout from a trade, I think the other player was confirmed with payment??? 
+;   Investigate further. Possibility of 4+ mins of nothing from the bot would make most think it's not working
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
@@ -107,6 +142,7 @@
 SendMode Event        ; REQUIRED!!!! PSOBB won't accept the deemed superior
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
 SetKeyDelay, 290, 80   ; SetKeyDelay, 150, 70  1st parameter is delay between keys 2nd is how long the button is pressed
+SetBatchLines, -1
 
 ; CHANGE THIS TO PSO's DIRECTORY
 global g_psoDirectory := "C:\Program Files\EphineaPSO"
@@ -116,7 +152,7 @@ global g_inventory := GetInventory()
 MessageArray( g_inventory )
 global g_itemPrices := []
 Loop % g_inventory.Length() {
-    g_itemPrices.Push( 2 )
+    g_itemPrices.Push( 1 )
     }
 
 global g_timeItemsShown := 0
@@ -125,20 +161,33 @@ global g_photonDrops := 0
 ; rough position of a blank piece of red menu that should only be blank during a trade
 global g_emptyMenuPosition := [ 45, 60, 145, 110 ]
 
+; rough positions used for imageSearching when removing items
+global g_leftBarPosition := [ 15, 370, 50, 480 ]
+; owner's slider position during "Add item for trade"
+global g_sliderPosition := [ 335, 370, 350, 475 ]
+
+; rough positions for chat input
+global g_chatPosition := [ 20, 435, 220, 475 ]
+
 
 ^p:: Pause  ; Ctrl + P - Pauses script.
      
 
 t:: ; Ctrl + T - Test
-    test := VerifyScreen( "TradeImages\addPdPos1.PNG", 2500 )
+    ;test := VerifyImageInPosition( g_sliderPosition, "TradeImages\CancelVerifyImages\noSlider.PNG", 3000 )
 
-    ;emptyMenuPosition := [ 45, 60, 145, 110 ]
+    ; emptyMenuPosition := [ 45, 60, 145, 110 ]
     ; checks for a blank piece of the red menu that should only be blank in this position during a trade???
-    ;test := VerifyImageInPosition( emptyMenuPosition, "TradeImages\redMenu.PNG", 500 )
+    ; test := VerifyImageInPosition( emptyMenuPosition, "TradeImages\redMenu.PNG", 500 )
     ; this will not be true if
     ; not in a trade
     ; trade is cancelled/finished ( cancelled.PNG or itemsExchanged.PNG is present )
-    MsgBox %test%
+    ;MsgBox %test%
+
+
+    RemoveExcessItems( [ 1 ] )
+
+
     return
 
 
@@ -252,7 +301,7 @@ VerifyScreen( filePath, searchTime )
     {
         ; using *200 color variations allows my laptop to find the initial tradeproposal 
         ; ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *200 %filePath%
-        ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *1 %filePath%
+        ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *140 %filePath%
         if (ErrorLevel = 2)
             MsgBox Could not conduct the search for %filePath%
         else if (ErrorLevel = 1)
@@ -287,9 +336,6 @@ ShowItems()
         }
         
     }
-    
-    ; WILL EVENTUALLY ADD IMAGE SEARCHES TO VERIFY no items or only currency is left in my inventory ???
-
     ; no currencies in inventory and no items left in "Add item for trade" menu
     if ( g_photonDrops == 0 and VerifyImageInPosition( tradeInventoryPosition, "TradeImages\addNoItem.PNG", 2000 ) )
     {
@@ -307,7 +353,6 @@ ShowItems()
         EscAndCancelTrade() ; assume not all items were added or the currencies were added as well and exit the trade
     }
 }
-
 
 
 TradeMeText()
@@ -338,7 +383,7 @@ GiveInstructions()
 {
     numOfItems := g_inventory.Length()
     ; instructions := Tell me the index (1-%numOfItems%) of the item/s you are interested in
-    instructions := "Tell me the index (1-" numOfItems ")"
+    instructions := "Tell me the index/s (1-" numOfItems ")"
     StartChatInTrade()
     Send %instructions%
     SendChatInTrade()
@@ -440,7 +485,7 @@ WatchChatLog()
                 ; Customer still needs to do do the final/2nd confirmation
                 else
                 {
-                    SayMsgInTrade( "Select the final confirmation plz" )
+                    SayMsgInTrade( "Select final confirmation plz" )
                 }
             }
             ; Tell customer how much to pay, placed it here so it checks for the payment first
@@ -769,20 +814,6 @@ FindRequestedIndexes()
         {
             requestedIndexes.Push( numbInChat )
         }
-        /* ; FOR TESTING  
-        else if ( numbInChat <= g_inventory.Length() )
-        {
-            MsgBox it considers it less than or equal to the inventories length %numbInChat%
-        }
-        else if ( numbInChat > 0 )
-        {
-            MsgBox it considers it greater then 0 but not less than or equal to the inventories length %numbInChat%
-        }
-        else 
-        {
-            MsgBox it doesn not consider it greater then 0 or less than or equal to the inventories length %numbInChat%
-        }
-        */
     }
     return requestedIndexes
 }
@@ -796,28 +827,26 @@ RemoveExcessItems( requestedItems )
     {
         return
     }
-
-    ; highlights "Cancel Candidate"
-    HoverCancelCandidate()
-    
     nonRequestedItems := GetNonRequested( requestedItems )
     ; the "Cancel Candidate" menu retains the position in between cancels
     cancelPos := 1
 
     ; keep track of how many items have been removed from the trade
     removedCount := 0
-    ; this variable will be used later to decide which images to match on screen, to verify the correct items are being removed
-    itemsInTrade := g_inventory.Length() - removedCount 
-    
+
+    ; used to decide which images to match on screen, to verify the correct items are being removed
+    itemsInTrade := g_inventory.Length()
 
     Loop % nonRequestedItems.Length() {
         ; if in trade menu 
         if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
         {
+            ; highlights "Cancel Candidate"
+            HoverCancelCandidate()
+
             ; selects "Cancel Candidate"
             EnterIfInTrade()
 
-            
             if ( cancelPos == ( nonRequestedItems[ A_Index ] - removedCount ) )
             {
                 ; Checks for the correct image and removes item if image found.  Otherwise chats and leaves trade
@@ -834,24 +863,58 @@ RemoveExcessItems( requestedItems )
                 RemoveItem( cancelPos, itemsInTrade )
             }
         }
-    ; keep track of how many items have been removed from the trade
+        else
+        {
+            Break
+        }
     removedCount++
+    itemsInTrade--
     }
+    ; selects "Cancel Candidate"
+    EnterIfInTrade()
 
+    ; IF I DON'T CHECK HERE the last item that's getting removed could possibly remain in the trade offer
+    if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) and IsFinalItemRemoved( cancelPos, itemsInTrade ) )
+    {
+        Send {Esc} ; leave the "Cancel candidate" menu, return to "Purpose" menu
+        ; highlights "Cancel Candidate", will find "Purpose" menu and then hover "Cancel candidate" if it's not already
+        HoverCancelCandidate()
+    }
+    else
+    {
+        ; explain mistake and exit trade
+        SayMsgInTrade( "Let's try again. Extra item left in trade" )
+        EscAndCancelTrade()
+    }
+    
 }
 
 
 ; Decides which image is needed to check in the ???cancel candidate menu???
 GetSliderImage( currentPos, itemsInTrade )
 {
-    ; when there is less than 3 itemsInTrade the slider is no longer available
+    x := IsFirstOrLastTwo( currentPos, itemsInTrade )
+
+    ; when there is less than 3 itemsInTrade the slider is no longer available, return alternate image
     if ( itemsInTrade <= 3 )
     {
-        return "TradeImages\CancelVerifyImages\leftSide" currentPos ".PNG"
+        if ( currentPos == 3 )
+        {
+            return "TradeImages\CancelVerifyImages\leftSide3rd.PNG"
+        }
+        else
+        {
+            return "TradeImages\CancelVerifyImages\leftSide" currentPos ".PNG"
+        }   
+    }
+    ; first two and last two share the same slider image when there is 4 or more itemsInTrade
+    else if ( x )
+    {
+        return "TradeImages\CancelVerifyImages\slider" x "of" itemsInTrade ".PNG"
     }
     else
     {
-        return "TradeImages\CancelVerifyImages\" currentPos "of" itemsInTrade ".PNG"
+        return "TradeImages\CancelVerifyImages\slider" currentPos "of" itemsInTrade ".PNG"
     }
 }
 
@@ -859,18 +922,59 @@ GetSliderImage( currentPos, itemsInTrade )
 ; Returns leftBarPosition or sliderPosition
 GetPosition( itemsInTrade )
 {
-    ; rough positions used for imageSearching
-    leftBarPosition := [ 20, 380, 50, 475 ]
-    sliderPosition := [ 335, 370, 350, 475 ]
 
     if ( itemsInTrade <= 3 )
     {
-        return leftBarPosition
+        return g_leftBarPosition
     }
     else
     {
-        return sliderPosition
+        return g_sliderPosition
     }
+}
+
+
+; True/False if it's in the position it should be after removing the final item from the trade offer
+IsFinalItemRemoved( cancelPos, itemsInTrade )
+{
+    if ( cancelPos > itemsInTrade ) ; then picture will be itemsInTrade of itemsInTrade ??? cancelPos := itemsInTrade then proceed as any other ???
+    {
+        cancelPos := itemsInTrade
+    }
+
+    position := GetPosition( itemsInTrade )
+    sliderImage := GetSliderImage( cancelPos, itemsInTrade )
+
+    ; greatest from requestedItemIndexes should be highlighted
+    if ( VerifyImageInPosition( position, sliderImage, 3000 ) )
+    {
+        ; the first two and last two slider images are the same when itemsInTrade is 4 or more, check for additional image
+        if ( IsFirstOrLastTwo( position, itemsInTrade ) )
+        {
+            leftImage := GetSharedImage( cancelPos, itemsInTrade )
+            if ( VerifyImageInPosition( g_leftBarPosition, leftImage, 3000 ) )
+            {
+                ; according to image checks screen matches itemsInTrade and cancelPos
+                return True
+            }
+        }
+        else if ( itemsInTrade > 3 ) ; no additional imageSearches needed
+        {
+            ; according to image checks screen matches itemsInTrade and cancelPos
+            return True
+        }
+        ; 3 or less in itemsInTrade, also check that the slider is not present
+        else if ( VerifyImageInPosition( g_sliderPosition, "TradeImages\CancelVerifyImages\noSlider.PNG", 1000 ) )
+        {
+            ; according to image checks screen matches itemsInTrade and cancelPos
+            return True
+        }
+    }
+    else
+    {
+        return False
+    }
+    
 }
 
 
@@ -878,20 +982,80 @@ GetPosition( itemsInTrade )
 RemoveItem( cancelPos, itemsInTrade )
 {
     position := GetPosition( itemsInTrade )
+    ;MessageArray(position)
     sliderImage := GetSliderImage( cancelPos, itemsInTrade )
 
     ; item to remove is highlighted
     if ( VerifyImageInPosition( position, sliderImage, 3000 ) )
     {
-        ; removes unwanted item from trade menu
-        EnterIfInTrade()
+        ; the first two and last two slider images are the same when itemsInTrade is 4 or more, check for additional image
+        if ( IsFirstOrLastTwo( position, itemsInTrade ) )
+        {
+            leftImage := GetSharedImage( cancelPos, itemsInTrade )
+            if ( VerifyImageInPosition( g_leftBarPosition, leftImage, 3000 ) )
+            {
+                ; removes unwanted item from trade menu
+                EnterIfInTrade()
+            }
+        }
+        else if ( itemsInTrade > 3 )
+        {
+            ; removes unwanted item from trade menu
+            EnterIfInTrade()
+        }
+        ; 3 or less in itemsInTrade, also check that the slider is not present ( leftSide.PNG should have been checked already )
+        else if ( VerifyImageInPosition( g_sliderPosition, "TradeImages\CancelVerifyImages\noSlider.PNG", 3000 ) )
+        {
+            ; removes unwanted item from trade menu
+            EnterIfInTrade()
+        }
     }
     else
     {
+        
         ; explain mistake and exit trade
         SayMsgInTrade( "Let's try again. Wrong items left in trade" )
         EscAndCancelTrade()
     }
+    Sleep 500
+}
+
+
+; Used to decide the image needed for when there is 4+ itemsInTrade and its the first two or last two
+GetSharedImage( position, itemsInTrade )
+{
+    if ( position <= 2 )
+    {
+        return "TradeImages\CancelVerifyImages\leftSide" position ".PNG"
+    }
+    else if ( position >= itemsInTrade ) 
+    {
+        return "TradeImages\CancelVerifyImages\leftSide4.PNG"
+    }
+    else
+    {
+        return "TradeImages\CancelVerifyImages\leftSide3.PNG"
+    }
+}
+
+; Returns 1/itemsInTrade if it is the first two or last two of the items in trade and there is 4+ itemsInTrade ( each pair uses the same slider image )
+IsFirstOrLastTwo( position, itemsInTrade )
+{
+    if ( itemsInTrade < 4 )
+    {
+        return 0
+    }
+    ; in position 1 or 2 and the slider is present
+    else if ( position <= 2 )
+    {
+        return 1
+    }
+    ; in the 2nd to last or last position and the slider is present
+    else if ( position >= ( itemsInTrade - 1 ) )
+    {
+        return itemsInTrade
+    }
+
 }
 
 
@@ -972,10 +1136,12 @@ InitialTradeConfirm()
 
 
 ; SHOULD MAKE A FUNCTION that will find which menu it's in and use it in the else statement???
+;   could also change else to, else if ( in trade menu ) Send {Esc} then FindPurposePos()
+;       that would make it so it should always be able to find it's way to and around the "Purpose" menu
 ; Finds current position of the "Purpose" menu returns 1 - 5
 FindPurposePos()
 {
-    searchTime := 400
+    searchTime := 500
 
     if ( VerifyScreen( "TradeImages\addItem.png", searchTime ) )
     {
@@ -999,6 +1165,11 @@ FindPurposePos()
     }
     else 
     {
+        ; if in the trade menu
+        if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+        {
+            Send {Esc} ; should eventually find it's self in the "Purpose" menu
+        }
         ; if it didn't match any of those images
         FindPurposePos()
     }
@@ -1148,7 +1319,7 @@ VerifyImageInPosition( positions, filePath, searchTime )
     { 
 
         ; ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *200 %filePath%
-        ImageSearch, , , x1, y1, x2, y2, *125 %filePath%
+        ImageSearch, , , x1, y1, x2, y2, *25 %filePath%
         if (ErrorLevel = 2)
             MsgBox Could not conduct the search for %filePath%
         else if (ErrorLevel = 1)
@@ -1227,7 +1398,7 @@ StartChatInTrade()
     while ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
     {
         ; do not need to check for cancelled.PNG as that is only available when redMenu.PNG is not
-        if ( VerifyScreen( "TradeImages\chatStart.PNG", 2000 ) or VerifyScreen( "TradeImages\greenChat.PNG", 1000 ) ) 
+        if ( VerifyImageInPosition( g_chatPosition, "TradeImages\chatStart.PNG", 2000 ) or VerifyImageInPosition( g_chatPosition, "TradeImages\greenChat.PNG", 1000 ) ) 
         {
             ; Exit out of the loop, the chat is seen as started.
             Break
@@ -1235,7 +1406,7 @@ StartChatInTrade()
         else
         {
             Send {Space}
-            Sleep 200
+            Sleep 700
         }
     }
 }
@@ -1269,7 +1440,6 @@ SendChatInTrade()
         {
             ; chat input was started but the message was never input, Send {Esc} and hopefully get out of chat input
             Send {Esc}
-            Sleep 1000
         }
     }
     ; still in trade
