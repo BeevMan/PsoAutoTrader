@@ -47,6 +47,7 @@
 ;
 ; Their is risk of the inventory desyncing 
 ;   Ender said "This game is old and almost everything is client side and the server just tries to match what clients are doing with tons of sanity checks. Inventory desync seems to happen for no reason sometimes, probably obscure client bugs given how rare."
+;       Cameron was able to make it desync already.  I did not watch to see what would happen afterwards :(  logged out/in and restarted instead
 ;
 ;
 ; WHEN ADDING IN the fail saves, I should check to make sure the player joining window is not displayed?
@@ -134,6 +135,9 @@
 ; Script can also go off walking if chat input is not up and it's trying to input a message
 ; Testing on crap pc, seemed to have to wait to timeout from a trade, I think the other player was confirmed with payment??? 
 ;   Investigate further. Possibility of 4+ mins of nothing from the bot would make most think it's not working
+;
+; NEED TO DO MORE TESTING ON FindPurposePos() and HoverCancelCandidate()
+;   I suspect that I seen issues with those when Cameron was trading with it.
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
@@ -357,7 +361,7 @@ ShowItems()
 
 TradeMeText()
 {
-    message := "Trade me txt"
+    message := "Trade me."
     Send {Space}%message%{Enter}
     ; Send {Space}I am an automated trader, running via AHK script :){Enter}
     ; Send {Space}Please send me a trade offer to see what I have for sale :){Enter}
@@ -877,8 +881,11 @@ RemoveExcessItems( requestedItems )
     if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) and IsFinalItemRemoved( cancelPos, itemsInTrade ) )
     {
         Send {Esc} ; leave the "Cancel candidate" menu, return to "Purpose" menu
+        
+        ; I THINK I'VE SEEN THIS BUGOUT WHEN TRADING WITH CAMERON, test further
+
         ; highlights "Cancel Candidate", will find "Purpose" menu and then hover "Cancel candidate" if it's not already
-        HoverCancelCandidate()
+        ;HoverCancelCandidate()
     }
     else
     {
@@ -1165,11 +1172,13 @@ FindPurposePos()
     }
     else 
     {
+        /* needs further testing
         ; if in the trade menu
         if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
         {
             Send {Esc} ; should eventually find it's self in the "Purpose" menu
         }
+        */
         ; if it didn't match any of those images
         FindPurposePos()
     }
