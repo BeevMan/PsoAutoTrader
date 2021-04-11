@@ -1,4 +1,6 @@
 ﻿; X Need to figure out how to use OCR and find the best place to use it/ where it matches best
+;     THIS COULD BE USEFUL FOR CHECKING CHAT BEFORE TRYING TO ENTER IT
+;       NEED TO test, in trade and outside of trade.
 ;     I should only try to implement this if people decide to try to grieve my shop script???
 ;     It works fairly well to retrieve names but I would have to add multiple languages and that may or may not be worth it???
 ;     If I do use it I should allow it to fuzzy match names???
@@ -8,7 +10,8 @@
 ;
 ; 
 ; I could make a variable that will store the guildcard of a player and apply the discount for buying multiple items in seperate purchases
-;   Would mostly be useful if/once I can accept and bank meseta 
+;   Would mostly be useful if/once I can accept and bank meseta
+;   Could even give new players discounts if I can find out what the current guild card numbers are ( make new accnt )
 ;
 ;
 ; Should be able to accept up to 3 different currencies at a time
@@ -20,7 +23,7 @@
 ;
 ;
 ; SHOULD ADD A CHECK for currencies in the inventory and stackable items when the script parses the inventory txt file
-;   Script should require atleast one of each accepted currency at the end of it's inventory
+;   Script should require atleast one of each accepted currency at the end of it's inventory or a full inventory 30/30
 ;       otherwise it could lead to vulnerabilities when it messes up in chat ( picking up dropped items )
 ;   script is currently not capable of trading stackable items
 ;   currency that is being accepted should not also be sold, at least at this time
@@ -47,7 +50,7 @@
 ;
 ; Their is risk of the inventory desyncing 
 ;   Ender said "This game is old and almost everything is client side and the server just tries to match what clients are doing with tons of sanity checks. Inventory desync seems to happen for no reason sometimes, probably obscure client bugs given how rare."
-;       Cameron was able to make it desync already.  I did not watch to see what would happen afterwards :(  logged out/in and restarted instead
+;       Cameron was able to make it desync on it's first public shop.  I did not watch to see what would happen afterwards :(  logged out/in and restarted instead
 ;
 ;
 ; WHEN ADDING IN the fail saves, I should check to make sure the player joining window is not displayed?
@@ -133,11 +136,15 @@
 ; PEOPLE CAN TRICK THE SCRIPT INTO PICKING UP ITEMS WHEN IT TRIES TO CHAT
 ;   if the script starts with no pds at the end of the inventory it can be tricked into picking up items from chat mess ups if it has no currency/trades made
 ; Script can also go off walking if chat input is not up and it's trying to input a message
+;   could loop through the message and Send each individual character its self
+;       could also check before each Send that's it's still in the trade menu
 ; Testing on crap pc, seemed to have to wait to timeout from a trade, I think the other player was confirmed with payment??? 
 ;   Investigate further. Possibility of 4+ mins of nothing from the bot would make most think it's not working
 ;
 ; NEED TO DO MORE TESTING ON FindPurposePos() and HoverCancelCandidate()
 ;   I suspect that I seen issues with those when Cameron was trading with it.
+;
+; NEED TO TEST all images for the inventory sliders
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
@@ -189,8 +196,8 @@ t:: ; Ctrl + T - Test
     ;MsgBox %test%
 
 
-    RemoveExcessItems( [ 1 ] )
-
+    ; RemoveExcessItems( [ 1 ] )
+    HoverCancelCandidate()
 
     return
 
@@ -885,7 +892,7 @@ RemoveExcessItems( requestedItems )
         ; I THINK I'VE SEEN THIS BUGOUT WHEN TRADING WITH CAMERON, test further
 
         ; highlights "Cancel Candidate", will find "Purpose" menu and then hover "Cancel candidate" if it's not already
-        ;HoverCancelCandidate()
+        HoverCancelCandidate()
     }
     else
     {
@@ -1089,6 +1096,10 @@ HoverCancelCandidate()
             }
             HoverCancelCandidate()
         }
+        else
+        {
+            HoverCancelCandidate() ; recursively call itself, currentPos undefined?
+        }
     }
 }
 
@@ -1131,12 +1142,16 @@ InitialTradeConfirm()
             Send {Up}
             InitialTradeConfirm()
         }
-        else 
+        else if ( currentPos <= 3 )
         {
             Loop % ( 4 - currentPos ) {
-                Send {Down}
+                Send {Down} ; Down can talk to npc's and shops
             }
             InitialTradeConfirm()
+        }
+        else
+        {
+            InitialTradeConfirm() ; recursively call itself, currentPos undefined?
         }
     }
 }
@@ -1172,13 +1187,18 @@ FindPurposePos()
     }
     else 
     {
-        /* needs further testing
+        ; NEEDS FURTHER TESTING
         ; if in the trade menu
         if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
         {
             Send {Esc} ; should eventually find it's self in the "Purpose" menu
         }
-        */
+        else
+        {
+            EscAndCancelTrade()
+            return
+        }
+        
         ; if it didn't match any of those images
         FindPurposePos()
     }
