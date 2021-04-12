@@ -29,6 +29,10 @@
 ;   currency that is being accepted should not also be sold, at least at this time
 ;
 ;
+; I SHOULD look into where the item reader addon pulls its data from???
+;       I COULD POSSIBLY use it to replace the inventory.txt parsing
+;
+;
 ; WILL NEED TO MAKE SURE currency images are taken at the same position ( and are the same size??? position alone should be fine)
 ;   will make searching easier and more reliable
 ;
@@ -133,6 +137,10 @@
 ; VerifyScreen( filePath, searchTime ) and VerifyImageInPosition( positions, filePath, searchTime ) for imageSearching
 ;
 ;
+; I MIGHT BE ABLE TO take images of the size of the green slider its self inside the cancel/verify items menu
+;   and use them to find inventory size? not sure it would be of any use
+;
+;
 ; PEOPLE CAN TRICK THE SCRIPT INTO PICKING UP ITEMS WHEN IT TRIES TO CHAT
 ;   if the script starts with no pds at the end of the inventory it can be tricked into picking up items from chat mess ups if it has no currency/trades made
 ; Script can also go off walking if chat input is not up and it's trying to input a message
@@ -144,7 +152,7 @@
 ; NEED TO DO MORE TESTING ON FindPurposePos() and HoverCancelCandidate()
 ;   I suspect that I seen issues with those when Cameron was trading with it.
 ;
-; NEED TO TEST all images for the inventory sliders
+; SEEMS to give two error explanation messages when it fails to find the correct item when removing items
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
@@ -152,7 +160,7 @@
 ; #Include <Vis2>
 SendMode Event        ; REQUIRED!!!! PSOBB won't accept the deemed superior
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
-SetKeyDelay, 290, 80   ; SetKeyDelay, 150, 70  1st parameter is delay between keys 2nd is how long the button is pressed
+SetKeyDelay, 290, 80   ; SetKeyDelay, 220, 70  1st parameter is delay between keys 2nd is how long the button is pressed
 SetBatchLines, -1
 
 ; CHANGE THIS TO PSO's DIRECTORY
@@ -185,19 +193,7 @@ global g_chatPosition := [ 20, 435, 220, 475 ]
      
 
 t:: ; Ctrl + T - Test
-    ;test := VerifyImageInPosition( g_sliderPosition, "TradeImages\CancelVerifyImages\noSlider.PNG", 3000 )
-
-    ; emptyMenuPosition := [ 45, 60, 145, 110 ]
-    ; checks for a blank piece of the red menu that should only be blank in this position during a trade???
-    ; test := VerifyImageInPosition( emptyMenuPosition, "TradeImages\redMenu.PNG", 500 )
-    ; this will not be true if
-    ; not in a trade
-    ; trade is cancelled/finished ( cancelled.PNG or itemsExchanged.PNG is present )
-    ;MsgBox %test%
-
-
-    ; RemoveExcessItems( [ 1 ] )
-    HoverCancelCandidate()
+    ; MsgBox % VerifyImageInPosition( g_sliderPosition, "TradeImages\CancelVerifyImages\noSlider.PNG", 3000 )
 
     return
 
@@ -924,11 +920,11 @@ GetSliderImage( currentPos, itemsInTrade )
     ; first two and last two share the same slider image when there is 4 or more itemsInTrade
     else if ( x )
     {
-        return "TradeImages\CancelVerifyImages\slider" x "of" itemsInTrade ".PNG"
+        return "TradeImages\CancelVerifyImages\" x "of" itemsInTrade ".PNG"
     }
     else
     {
-        return "TradeImages\CancelVerifyImages\slider" currentPos "of" itemsInTrade ".PNG"
+        return "TradeImages\CancelVerifyImages\" currentPos "of" itemsInTrade ".PNG"
     }
 }
 
@@ -1003,13 +999,17 @@ RemoveItem( cancelPos, itemsInTrade )
     if ( VerifyImageInPosition( position, sliderImage, 3000 ) )
     {
         ; the first two and last two slider images are the same when itemsInTrade is 4 or more, check for additional image
-        if ( IsFirstOrLastTwo( position, itemsInTrade ) )
+        if ( IsFirstOrLastTwo( cancelPos, itemsInTrade ) )
         {
             leftImage := GetSharedImage( cancelPos, itemsInTrade )
             if ( VerifyImageInPosition( g_leftBarPosition, leftImage, 3000 ) )
             {
                 ; removes unwanted item from trade menu
                 EnterIfInTrade()
+            }
+            else
+            {
+                MsgBox, %leftImage%
             }
         }
         else if ( itemsInTrade > 3 )
@@ -1026,7 +1026,7 @@ RemoveItem( cancelPos, itemsInTrade )
     }
     else
     {
-        
+        MsgBox, %sliderImage%
         ; explain mistake and exit trade
         SayMsgInTrade( "Let's try again. Wrong items left in trade" )
         EscAndCancelTrade()
@@ -1352,7 +1352,15 @@ VerifyImageInPosition( positions, filePath, searchTime )
         if (ErrorLevel = 2)
             MsgBox Could not conduct the search for %filePath%
         else if (ErrorLevel = 1)
+        {
             imageFound := False
+            /*
+            if ( InStr( filepath, "TradeImages\CancelVerifyImages\" ) )
+            {
+                MsgBox failed to find on the screen %filePath%
+            }
+            */
+        }
         else
             imageFound := True
     }
