@@ -1,4 +1,8 @@
-﻿; X Need to figure out how to use OCR and find the best place to use it/ where it matches best
+﻿; https://www.autohotkey.com/docs/commands/FileInstall.htm
+;   CAN BE USED TO compile all the folders/files and script into an exe???
+;
+;
+; X Need to figure out how to use OCR and find the best place to use it/ where it matches best
 ;     THIS COULD BE USEFUL FOR CHECKING CHAT BEFORE TRYING TO ENTER IT
 ;       NEED TO test, in trade and outside of trade.
 ;     I should only try to implement this if people decide to try to grieve my shop script???
@@ -24,17 +28,13 @@
 ;
 ; SHOULD ADD A CHECK for currencies in the inventory and stackable items when the script parses the inventory txt file
 ;   Script should require atleast one of each accepted currency at the end of it's inventory or a full inventory 30/30
-;       otherwise it could lead to vulnerabilities when it messes up in chat ( picking up dropped items )
+;       otherwise it could lead to vulnerabilities when if it messes up in chat ( picking up dropped items )
 ;   script is currently not capable of trading stackable items
 ;   currency that is being accepted should not also be sold, at least at this time
 ;
 ;
 ; I SHOULD look into where the item reader addon pulls its data from???
-;       I COULD POSSIBLY use it to replace the inventory.txt parsing
-;
-;
-; WILL NEED TO MAKE SURE currency images are taken at the same position ( and are the same size??? position alone should be fine)
-;   will make searching easier and more reliable
+;       I COULD POSSIBLY use it to replace the inventory.txt parsing???
 ;
 ;
 ; ImageSearch supports 8-bit color screens (256-color) or higher.
@@ -118,7 +118,7 @@
 ;
 ;
 ; SayMsgInTrade() seems to be skipping the beginning of it's messages most the time or all the time???
-;   too much or little transparency in the checks for the start of chat seem to cause it?
+;   X too much or little transparency in the checks for the start of chat seem to cause it?
 ;
 ;
 ; leftSide images used when there is less then 3 itemsInTrade
@@ -133,6 +133,8 @@
 ;
 ; When there is only 3 items in trade and the 3rd is highlighted leftSide4.PNG matches at *150???
 ;
+; confirmed.PNG matches incorrectly above *145
+;
 ;
 ; VerifyScreen( filePath, searchTime ) and VerifyImageInPosition( positions, filePath, searchTime ) for imageSearching
 ;
@@ -144,15 +146,24 @@
 ; PEOPLE CAN TRICK THE SCRIPT INTO PICKING UP ITEMS WHEN IT TRIES TO CHAT
 ;   if the script starts with no pds at the end of the inventory it can be tricked into picking up items from chat mess ups if it has no currency/trades made
 ; Script can also go off walking if chat input is not up and it's trying to input a message
+;   Could require the use of f11 ( turns keyboad into chat only? ), would have to edit chat sending/functions
 ;   could loop through the message and Send each individual character its self
 ;       could also check before each Send that's it's still in the trade menu
-; Testing on crap pc, seemed to have to wait to timeout from a trade, I think the other player was confirmed with payment??? 
-;   Investigate further. Possibility of 4+ mins of nothing from the bot would make most think it's not working
 ;
-; NEED TO DO MORE TESTING ON FindPurposePos() and HoverCancelCandidate()
-;   I suspect that I seen issues with those when Cameron was trading with it.
 ;
-; SEEMS to give two error explanation messages when it fails to find the correct item when removing items
+; Issue fixed on FindPurposePos() and HoverCancelCandidate() 
+;   TRANSPARENCY MATTERS for many of the menu positions ( if highlights )
+;
+;
+; I should make the bot say the price before removing the items???
+;
+;
+; X was giving two error explanation messages when it fails to find the correct item when removing items
+;   the closing else statement of RemoveExcessItems() was the 2nd message
+;       now checks that it's in the trade menu still, after the first message it leaves the trade so the 2nd will not trigger anymore
+;
+;
+; EnterIfInTrade() should be changed to KeyIfInTrade( toInput )
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
@@ -171,7 +182,7 @@ global g_inventory := GetInventory()
 MessageArray( g_inventory )
 global g_itemPrices := []
 Loop % g_inventory.Length() {
-    g_itemPrices.Push( 1 )
+    g_itemPrices.Push( 2 )
     }
 
 global g_timeItemsShown := 0
@@ -193,8 +204,8 @@ global g_chatPosition := [ 20, 435, 220, 475 ]
      
 
 t:: ; Ctrl + T - Test
-    ; MsgBox % VerifyImageInPosition( g_sliderPosition, "TradeImages\CancelVerifyImages\noSlider.PNG", 3000 )
-
+    ;MsgBox % VerifyScreen( "TradeImages\confirmed.PNG", 3000 )
+    ;InitialTradeConfirm()
     return
 
 
@@ -308,7 +319,7 @@ VerifyScreen( filePath, searchTime )
     {
         ; using *200 color variations allows my laptop to find the initial tradeproposal 
         ; ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *200 %filePath%
-        ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *140 %filePath%
+        ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *120 %filePath%
         if (ErrorLevel = 2)
             MsgBox Could not conduct the search for %filePath%
         else if (ErrorLevel = 1)
@@ -483,8 +494,6 @@ WatchChatLog()
                 ; Verify the customer has selected the final confirmed 
                 if ( VerifyScreen( "TradeImages\customerFinalConfirmed.PNG", 1500 ) )
                 {
-                    ;MsgBox customer has confirmed and put the correct payment up
-
                     ; Navigate to and select the final trade confirmation
                     FinalTradeConfirmation()
                     SelectFinalYes()
@@ -884,13 +893,11 @@ RemoveExcessItems( requestedItems )
     if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) and IsFinalItemRemoved( cancelPos, itemsInTrade ) )
     {
         Send {Esc} ; leave the "Cancel candidate" menu, return to "Purpose" menu
-        
-        ; I THINK I'VE SEEN THIS BUGOUT WHEN TRADING WITH CAMERON, test further
 
         ; highlights "Cancel Candidate", will find "Purpose" menu and then hover "Cancel candidate" if it's not already
         HoverCancelCandidate()
     }
-    else
+    else if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) ) ; make sure it's still in trade to avoid giving double fail message ( when RemoveItem() fails an imageSearch too )
     {
         ; explain mistake and exit trade
         SayMsgInTrade( "Let's try again. Extra item left in trade" )
@@ -1157,9 +1164,6 @@ InitialTradeConfirm()
 }
 
 
-; SHOULD MAKE A FUNCTION that will find which menu it's in and use it in the else statement???
-;   could also change else to, else if ( in trade menu ) Send {Esc} then FindPurposePos()
-;       that would make it so it should always be able to find it's way to and around the "Purpose" menu
 ; Finds current position of the "Purpose" menu returns 1 - 5
 FindPurposePos()
 {
