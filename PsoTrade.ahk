@@ -114,18 +114,22 @@
 ;
 ;
 ; PEOPLE CAN TRICK THE SCRIPT INTO PICKING UP ITEMS WHEN IT TRIES TO CHAT
-;   if the script starts with no pds at the end of the inventory it can be tricked into picking up items from chat mess ups if it has no currency/trades made
+;   if the script starts with no pds at the end of the inventory it can be tricked into picking up items from chat mess ups and stop it from trading
+;       if it doesn't have a full inventory or pds at the end of it's inventory when starting IT COULD BE A PROBLEM
 ; Script can also go off walking if chat input is not up and it's trying to input a message
 ;   Could require the use of f11 ( turns keyboad into chat only? ), would have to edit chat sending/functions
-;   could loop through the message and Send each individual character its self
-;       could also check before each Send that's it's still in the trade menu
+;   X NOW loops through the message and Send each individual character its self
+;       should help prevent picking up items / unwanted inputs
 ;
 ;
 ; Issue fixed on FindPurposePos() and HoverCancelCandidate() 
 ;   TRANSPARENCY MATTERS for many of the menu positions ( if highlights ) should test further/take notes of image transparency requirements
 ;
 ;
-; 
+; NEED TO CHANGE all or most??? key Send/s that occur during a trade to KeyIfInTrade( toInput )???
+;
+; Change all VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) into a function??? IsInTrade()
+;   to provide better readability
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
@@ -166,8 +170,7 @@ global g_chatPosition := [ 20, 435, 220, 475 ]
      
 
 t:: ; Ctrl + T - Test
-    MsgBox % VerifyScreen( "TradeImages\CancelVerifyImages\1of30.PNG", 3000 )
-    ;InitialTradeConfirm()
+    ;MsgBox % VerifyScreen( "TradeImages\CancelVerifyImages\1of30.PNG", 3000 )
     return
 
 
@@ -361,10 +364,7 @@ GiveInstructions()
     numOfItems := g_inventory.Length()
     ; instructions := Tell me the index (1-%numOfItems%) of the item/s you are interested in
     instructions := "Tell me the index/s (1-" numOfItems ")"
-    StartChatInTrade()
-    Send %instructions%
-    SendChatInTrade()
-    ; WILL EVENTUALLY RUN some sort of check to make sure the script spoke in chat
+    SayMsgInTrade( instructions )
 }
 
 
@@ -1462,7 +1462,31 @@ SendChatInTrade()
 SayMsgInTrade( msg )
 {
     StartChatInTrade()
-    Send %msg%
+    splitMsg := StrSplit( msg, " " )
+    Loop % splitMsg.Length() {
+        if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+        {
+            if ( A_Index > 1 )
+            {
+                KeyIfInTrade( "Space" )
+            }            
+            splitWord := StrSplit( splitMsg[ A_Index ] )
+            Loop % splitWord.Length() {
+                if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+                {
+                    KeyIfInTrade( splitWord[ A_Index ] )
+                }
+                else
+                {
+                    Break
+                }
+            }
+        }
+        else
+        {
+            Break
+        }
+    }
+    
     SendChatInTrade()
-    ; WILL EVENTUALLY RUN some sort of check to make sure the script spoke in chat
 }
