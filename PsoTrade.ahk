@@ -47,11 +47,6 @@
 ;               ONLY TESTED VARIATIONS OF 25
 ;
 ;
-; In the future I may want to add a check to see if the customer is final confirmed with the wrong payment offered
-;   in the case of the above being true, It would cancel confirmation
-;       allowing the other player to be able to adjust their payment without having to leave/rejoin the game
-;
-;
 ; Their is risk of the inventory desyncing 
 ;   Ender said "This game is old and almost everything is client side and the server just tries to match what clients are doing with tons of sanity checks. Inventory desync seems to happen for no reason sometimes, probably obscure client bugs given how rare."
 ;       Cameron was able to make it desync on it's first public shop.  I did not watch to see what would happen afterwards :(  logged out/in and restarted instead
@@ -74,14 +69,11 @@
 ;           COULD/SHOULD NOW check that the chat made it into the chat log ???
 ;               currently has to be said perfectly if checked with IsMessageInLog()
 ;               ???could change to fuzzy search for the string or simply check that the scripts character said something recently???
-;   While in trade,
-;       I may want to rely on the above recursive chat starting/ending idea for mid trade chat
-;       ??? if I do the above it should be able to find it's way in WatchChatLog() ???
 ;   While NOT in a trade, if the message is not found recently in the chatlog:
 ;       then it should be assumed:
 ;           the chat input is still up, which could stop trade offers from appearing
 ;               chat input could still be up do to somebody recently joining or currently joining
-;                   ??? check to make sure their is not a player joining ??? playerJoining.PNG
+;                   ??? check to make sure their is not a player joining ??? playerJoining.PNG or look into searching for a pixel of the playerJoining.PNG pixelSearch ???
 ;           or the chat input was never started and it could possibly hit enter on a trade offer
 ;               could get stuck in a trade window at this point ( small possibility ) TO PREVENT THIS I COULD:
 ;                   X check for the redMenu.PNG in the j hotkey while loop, if found it would simply exit out of the trade menu??? as it's not suppose to be in there
@@ -92,33 +84,14 @@
 ;       Will need to decide how to handle retrieving the chat log and when, if the trade takes place during a date change on client machine 
 ;       I need to look further into AHK's native time methods
 ;           using A_TickCount becomes unstable on slow machines ( times are often off by varying amounts sometimes drastic )
-;       
-;
-;   X ADDED the image searches when showing/removing items from the trade window ( to verify it only leaves the requested items )
-;       I STILL NEED TO TAKE THE IMAGES FOR THE SEARCH WITH INVENTORIES OF MORE THAN 5
-;       WHEN ADDING ITEMS TO TRADE WINDOW the last 4 do not include the slider
-;           to verify all items were added to the trade window:
-;               X Checks the add item window for no items or whatever currencies it expects to have ( in ShowItems() )
-;                   the above should require a lot less imagery and script execution time compared to using images to verify each item is added one by one
-;       WHEN REMOVING ITEMS FROM THE TRADE WINDOW the last 3 items do not inlcude the slider in "Cancel candidate" menu
-;           THE FIRST TWO AND LAST TWO items being removed share the same slider pic on all sets above 3
-;               X I could check for the leftSide.PNG pic as well with those
-;               ???I could add the leftSide.PNG pic in for all of them???
-;               In my magFeed script I put the highlight in with the slider images
-;                   however I'm not sure I want to rule out the chance to sell stackable items in the future
-;           this will use the same slider images that could be used in the "verify items" menu
-;           X implement imageSearch inside of RemoveExcessItems()
-;           X Also need to add a check at the bottom of RemoveExcessItems() to ensure the proper item/s remain ( can only check pos of itemsInTrade )
-;               implemented IsFinalItemRemoved() at the bottom of RemoveExcessItems(), still need to test
-;               IF I DON'T CHECK HERE the last item that's getting removed could possibly remain in the trade offer
 ;               
 ;
 ; I should make IsPaymentCorrect() check if it's a floating point
 ;   if it's a floting point it should round up to the nearest integer ( will allow people to sell items for fractions of a pd, 2:1 etc )
 ;
 ;
-; SayMsgInTrade() seems to be skipping the beginning of it's messages most the time or all the time???
-;   X too much or little transparency in the checks for the start of chat seem to cause it?
+; SayMsgInTrade() can skip the beginning of it's messages if/when transparency in the ImageSearches is too much or little
+;   VerifyScreen( filePath, searchTime ) and VerifyImageInPosition( positions, filePath, searchTime ) for imageSearching
 ;
 ;
 ; leftSide images used when there is less then 3 itemsInTrade
@@ -136,9 +109,6 @@
 ; confirmed.PNG matches incorrectly above *145
 ;
 ;
-; VerifyScreen( filePath, searchTime ) and VerifyImageInPosition( positions, filePath, searchTime ) for imageSearching
-;
-;
 ; I MIGHT BE ABLE TO take images of the size of the green slider its self inside the cancel/verify items menu
 ;   and use them to find inventory size? not sure it would be of any use
 ;
@@ -152,18 +122,10 @@
 ;
 ;
 ; Issue fixed on FindPurposePos() and HoverCancelCandidate() 
-;   TRANSPARENCY MATTERS for many of the menu positions ( if highlights )
+;   TRANSPARENCY MATTERS for many of the menu positions ( if highlights ) should test further/take notes of image transparency requirements
 ;
 ;
-; I should make the bot say the price before removing the items???
-;
-;
-; X was giving two error explanation messages when it fails to find the correct item when removing items
-;   the closing else statement of RemoveExcessItems() was the 2nd message
-;       now checks that it's in the trade menu still, after the first message it leaves the trade so the 2nd will not trigger anymore
-;
-;
-; EnterIfInTrade() should be changed to KeyIfInTrade( toInput )
+; 
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
@@ -204,7 +166,7 @@ global g_chatPosition := [ 20, 435, 220, 475 ]
      
 
 t:: ; Ctrl + T - Test
-    ;MsgBox % VerifyScreen( "TradeImages\confirmed.PNG", 3000 )
+    MsgBox % VerifyScreen( "TradeImages\CancelVerifyImages\1of30.PNG", 3000 )
     ;InitialTradeConfirm()
     return
 
@@ -342,15 +304,14 @@ ShowItems()
 
     ; +1 so after all items are added it should be in a position to check for addNoItem.PNG or current currencies
     Loop % ( g_inventory.Length() * 2 ) + 1 {
-        ; CHECK THAT "add item for trade" is highlighted on odds and itemList.PNG is present for evens
-        ; EnterIfInTrade()
+        ; CHECK THAT "add item for trade" is highlighted on odds and itemList.PNG is present for evens. KeyIfInTrade( "Enter" )
         if ( Mod( A_Index, 2 ) != 0 and VerifyScreen( "TradeImages\addItem.PNG", 3000 ) )
         {
-            EnterIfInTrade()
+            KeyIfInTrade( "Enter" )
         }
         else if ( Mod( A_Index, 2 ) == 0 and VerifyScreen( "TradeImages\itemList.PNG", 3000 ) )
         {
-            EnterIfInTrade()
+            KeyIfInTrade( "Enter" )
         }
         
     }
@@ -375,10 +336,8 @@ ShowItems()
 
 TradeMeText()
 {
-    message := "Trade me."
+    message := "Trade me, my items cost " g_itemPrices[ 1 ] " pd each."
     Send {Space}%message%{Enter}
-    ; Send {Space}I am an automated trader, running via AHK script :){Enter}
-    ; Send {Space}Please send me a trade offer to see what I have for sale :){Enter}
 
     textTimeStamp := TimeInSecs( A_Hour, A_Min, A_Sec )
     Sleep, 5000
@@ -445,36 +404,33 @@ WatchChatLog()
             ; SHOULD CONSIDER ADDING A MESSAGE TO LET CUSTOMER KNOW TRADE IS BEING CANCELED
 
             ; NAVIGATE TO AND SELECT CANCEL TRADE
-            ;   I think backspacing/Esc will always get you to the "cancel exchange" confirmation menu.  Unless you have already selected the final confirmation. 
-            ;   Also Esc will not exit out of the cancel exchange menu
             EscAndCancelTrade()
 
-            ; Make it jump to the next while() check.  This will make sure it made it out of the trade menu.
-            Continue
+            Continue ; Make it jump to the next while() check.  This will make sure it made it out of the trade menu.
         }
-
 
         ; if it's the initial item/s request
         if ( requestedItemIndexes.Length() == 0 and requestedIndex.Length() > 0 ) 
         {
             requestedItemIndexes := requestedIndex
+            tradeTotal := GetTradeTotal( requestedItemIndexes )
+            message := tradeTotal "pd, then confirm plz"
+            SayMsgInTrade( message )
             ; Removes non requested items from the trade window
             RemoveExcessItems( requestedItemIndexes )
         }
-        ; if nothing has been requested, Give customer instructions again
-        /* UN COMMENT THIS AFTER TESTING it's annoying to have it talk that much during testing
-        else if ( requestedItemIndexes.Length() == 0 and requestedIndex.Length() == 0 )
+        ; Give customer instructions every 5 loops, if nothing has been requested. 
+        else if ( requestedItemIndexes.Length() == 0 and Mod( A_Index, 5) == 0 )
         {
             GiveInstructions()
         }
-        */
         ; should only go into this if statement after items have been requested and left/added to trade
         else if ( requestedItemIndexes.Length() > 0 and !VerifyScreen( "TradeImages\my1stConfirm.PNG", 1500 ) )
         {
             ; if script is in the purpose menu
             if ( VerifyScreen( "TradeImages\purposeMenu.png", 500 ) )
             {
-                ; should navigate to the first trade confirm and select it
+                ; Should navigate to the first trade confirm and select it.
                 InitialTradeConfirm()
             }
             ; double check that it's not in the purpose menu
@@ -488,6 +444,7 @@ WatchChatLog()
         ;  ( only requested items should be in the trade window )
         else if ( requestedItemIndexes.Length() > 0 and  VerifyScreen( "TradeImages\customerConfirmed.PNG", 1500 ) or VerifyScreen( "TradeImages\customerFinalConfirmed.PNG", 1500 ) )
         {
+            Sleep 3000 ; brief sleep to give customer chance to beat the script to final confirm.
             ; Check if customer has put the appropriate payment into the trade window
             if ( IsPaymentCorrect( tradeTotal ) )
             {
@@ -504,6 +461,11 @@ WatchChatLog()
                     SayMsgInTrade( "Select final confirmation plz" )
                 }
             }
+            else if ( VerifyScreen( "TradeImages\customerFinalConfirmed.PNG", 1500 ) )
+            {
+                ; Should navigate to the first trade confirm and select it.  Allowing the customer to exit the trade or put the appropriate payment in the trade
+                InitialTradeConfirm()
+            }
             ; Tell customer how much to pay, placed it here so it checks for the payment first
             ; should help prevent spamming the customer to put the money in the trade window when it's already there 
             else
@@ -515,8 +477,6 @@ WatchChatLog()
         ; if 1 or more items requested but customer has not confirmed.  COULD MAYBE GET RID OF THE VerifyScreen() call
         else if ( requestedItemIndexes.Length() > 0 and  !VerifyScreen( "TradeImages\customerConfirmed.PNG", 1500 ) )
         {
-            ; I COULD AND MIGHT CHECK TO SEE IF THE PDS ARE IN THE TRADE WINDOW 
-            ; THEN RESPOND TO CUSTOMER APPROPRIATELY 
             message := tradeTotal "pd, then confirm plz"
             SayMsgInTrade( message )
             Sleep 3000
@@ -581,7 +541,7 @@ EscAndCancelTrade()
         {
             if ( VerifyScreen( "TradeImages\yes.png", 700 ) ) ; if yes is highlighted
             {
-                EnterIfInTrade()
+                KeyIfInTrade( "Enter" )
             }
             else 
             {
@@ -861,7 +821,7 @@ RemoveExcessItems( requestedItems )
             HoverCancelCandidate()
 
             ; selects "Cancel Candidate"
-            EnterIfInTrade()
+            KeyIfInTrade( "Enter" )
 
             if ( cancelPos == ( nonRequestedItems[ A_Index ] - removedCount ) )
             {
@@ -887,7 +847,7 @@ RemoveExcessItems( requestedItems )
     itemsInTrade--
     }
     ; selects "Cancel Candidate"
-    EnterIfInTrade()
+    KeyIfInTrade( "Enter" )
 
     ; IF I DON'T CHECK HERE the last item that's getting removed could possibly remain in the trade offer
     if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) and IsFinalItemRemoved( cancelPos, itemsInTrade ) )
@@ -1012,7 +972,7 @@ RemoveItem( cancelPos, itemsInTrade )
             if ( VerifyImageInPosition( g_leftBarPosition, leftImage, 3000 ) )
             {
                 ; removes unwanted item from trade menu
-                EnterIfInTrade()
+                KeyIfInTrade( "Enter" )
             }
             else
             {
@@ -1022,13 +982,13 @@ RemoveItem( cancelPos, itemsInTrade )
         else if ( itemsInTrade > 3 )
         {
             ; removes unwanted item from trade menu
-            EnterIfInTrade()
+            KeyIfInTrade( "Enter" )
         }
         ; 3 or less in itemsInTrade, also check that the slider is not present ( leftSide.PNG should have been checked already )
         else if ( VerifyImageInPosition( g_sliderPosition, "TradeImages\CancelVerifyImages\noSlider.PNG", 3000 ) )
         {
             ; removes unwanted item from trade menu
-            EnterIfInTrade()
+            KeyIfInTrade( "Enter" )
         }
     }
     else
@@ -1142,7 +1102,7 @@ InitialTradeConfirm()
         ; if confirmed is highlighted 
         if ( currentPos == 4 )
         {
-            EnterIfInTrade()
+            KeyIfInTrade( "Enter" )
         }
         else if ( currentPos == 5 )
         {
@@ -1220,7 +1180,7 @@ SelectFinalYes()
             Send {Up} ; pressing up in this menu will not reset to the bottom selection. 
             if ( VerifyScreen( "TradeImages\yes.png", 1000 ) )
             {
-                EnterIfInTrade()
+                KeyIfInTrade( "Enter" )
             }
         }
         else
@@ -1241,7 +1201,7 @@ FinalTradeConfirmation()
         ; if Final Confirmation is highlighted 
         if ( currentPos == 3 )
         {
-            EnterIfInTrade()
+            KeyIfInTrade( "Enter" )
         }
         else if ( currentPos == 4 )
         {
@@ -1423,11 +1383,11 @@ SaidRecentlyInLog( log, timeSaid )
 
 
 ; Send {Enter} if in trade window
-EnterIfInTrade()
+KeyIfInTrade( toInput )
 {
     if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
     {
-        Send {Enter}
+        Send {%toInput%}
     }
 }
 
@@ -1466,7 +1426,7 @@ SendChatInTrade()
         else
         {
             ; maybe want to replace this with regular Send {Enter} ??? 
-            EnterIfInTrade()
+            KeyIfInTrade( "Enter" )
         }
     }
     ; if chat was started, but no other keys have been input
