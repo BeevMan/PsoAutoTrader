@@ -86,10 +86,6 @@
 ;       Will need to decide how to handle retrieving the chat log and when, if the trade takes place during a date change on client machine 
 ;       I need to look further into AHK's native time methods
 ;           using A_TickCount becomes unstable on slow machines ( times are often off by varying amounts sometimes drastic )
-;               
-;
-; I should make IsPaymentCorrect() check if it's a floating point
-;   if it's a floting point it should round up to the nearest integer ( will allow people to sell items for fractions of a pd, 2:1 etc )
 ;
 ;
 ; SayMsgInTrade() can skip the beginning of it's messages if/when transparency in the ImageSearches is too much or little
@@ -111,6 +107,10 @@
 ; confirmed.PNG matches incorrectly above *145
 ;
 ;
+; Issue fixed on FindPurposePos() and HoverCancelCandidate() 
+;   TRANSPARENCY MATTERS for many of the menu positions ( if highlights ) should test further/take notes of image transparency requirements
+;
+;
 ; I MIGHT BE ABLE TO take images of the size of the green slider its self inside the cancel/verify items menu
 ;   and use them to find inventory size? not sure it would be of any use
 ;
@@ -122,10 +122,6 @@
 ;   Could require the use of f11 ( turns keyboad into chat only? ), would have to edit chat sending/functions
 ;   X NOW loops through the message and Send each individual character its self
 ;       should help prevent picking up items / unwanted inputs
-;
-;
-; Issue fixed on FindPurposePos() and HoverCancelCandidate() 
-;   TRANSPARENCY MATTERS for many of the menu positions ( if highlights ) should test further/take notes of image transparency requirements
 ;
 ;
 
@@ -146,7 +142,7 @@ global g_inventory := GetInventory()
 MessageArray( g_inventory )
 global g_itemPrices := []
 Loop % g_inventory.Length() {
-    g_itemPrices.Push( 2 )
+    g_itemPrices.Push( 1 )
     }
 
 global g_timeItemsShown := 0
@@ -168,7 +164,7 @@ global g_chatPosition := [ 20, 435, 220, 475 ]
      
 
 t:: ; Ctrl + T - Test
-    MsgBox % g_inventory[ g_inventory.Length() ] 
+    MsgBox % GetTradeTotal( [ 1, 2, 3 ] )
     return
 
 
@@ -1287,6 +1283,10 @@ GetTradeTotal( requestedInventory )
     Loop % requestedInventory.Length() {
         totalCost += g_itemPrices[ requestedInventory[ A_Index ] ]
     }
+    ; if it's a floating point, round up
+    if totalCost is Float
+        totalCost := Ceil( totalCost )
+
     return totalCost
 }
 
