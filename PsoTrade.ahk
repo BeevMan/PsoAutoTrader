@@ -128,9 +128,6 @@
 ;   TRANSPARENCY MATTERS for many of the menu positions ( if highlights ) should test further/take notes of image transparency requirements
 ;
 ;
-; NEED TO CHANGE all or most??? key Send/s that occur during a trade to KeyIfInTrade( toInput )???
-;
-;
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
@@ -364,12 +361,12 @@ ShowItems()
     ; no currencies in inventory and no items left in "Add item for trade" menu
     if ( g_photonDrops == 0 and VerifyImageInPosition( tradeInventoryPosition, "TradeImages\addNoItem.PNG", 2000 ) )
     {
-        Send {Esc} ; all items added, return to the purpose menu
+        KeyIfInTrade( "Esc" ) ; all items added, return to the purpose menu
     }
     ; when the script has pds check for them in position 1 of the "Add item for trade" menu
     else if ( g_photonDrops > 0 and VerifyImageInPosition( tradeInventoryPosition, "TradeImages\addPdPos1.PNG", 2000 )  )
     {
-        Send {Esc} ; all items besides currencies added, return to the purpose menu
+        KeyIfInTrade( "Esc" ) ; all items besides currencies added, return to the purpose menu
     }
     else
     {
@@ -480,7 +477,7 @@ WatchChatLog()
             else if ( !VerifyScreen( "TradeImages\purposeMenu.png", 500 ) )
             {
                 ; Send {Esc} until it's in the purpose menu
-                Send {Esc}
+                KeyIfInTrade( "Esc" )
             }
         }
         ; if customer has confirmed the 1st time or final time and 1 or more items have been requested
@@ -587,13 +584,13 @@ EscAndCancelTrade()
             }
             else 
             {
-                Send {Up} ; no should be highlighted, send up to highlight yes
+                KeyIfInTrade( "Up" ) ; no should be highlighted, send up to highlight yes
                 EscAndCancelTrade()
             }
         }
         else
         {
-            Send {Esc}
+            KeyIfInTrade( "Esc" )
             Sleep, 500 ; without this sleep it seems impossible for the function to see cancelExchange.png after recalling itself, sleep time could be lowered??? 
             ; ??? or simply add the time to the search for cancelExchange.png ???
             EscAndCancelTrade()
@@ -873,7 +870,7 @@ RemoveExcessItems( requestedItems )
             {
                 ; hover/highlight the next unwanted item
                 Loop % ( ( nonRequestedItems[ A_Index ] - cancelPos ) - removedCount ) {
-                    Send {Down}
+                    KeyIfInTrade( "Down" )
                     cancelPos++
                 }
                 ; Checks for the correct image and removes item if image found.  Otherwise chats and leaves trade
@@ -893,7 +890,7 @@ RemoveExcessItems( requestedItems )
     ; IF I DON'T CHECK HERE the last item that's getting removed could possibly remain in the trade offer
     if ( IsInTrade() and IsFinalItemRemoved( cancelPos, itemsInTrade ) )
     {
-        Send {Esc} ; leave the "Cancel candidate" menu, return to "Purpose" menu
+        KeyIfInTrade( "Esc" ) ; leave the "Cancel candidate" menu, return to "Purpose" menu
 
         ; highlights "Cancel Candidate", will find "Purpose" menu and then hover "Cancel candidate" if it's not already
         HoverCancelCandidate()
@@ -1093,13 +1090,13 @@ HoverCancelCandidate()
         }
         else if ( currentPos == 1 )
         {
-            Send {Down}
+            KeyIfInTrade( "Down" )
             HoverCancelCandidate()
         }
         else if ( currentPos > 2 )
         {
             Loop % currentPos - 2 {
-                Send {Up}
+                KeyIfInTrade( "Up" )
             }
             HoverCancelCandidate()
         }
@@ -1145,13 +1142,13 @@ InitialTradeConfirm()
         }
         else if ( currentPos == 5 )
         {
-            Send {Up}
+            KeyIfInTrade( "Up" )
             InitialTradeConfirm()
         }
         else if ( currentPos <= 3 )
         {
             Loop % ( 4 - currentPos ) {
-                Send {Down} ; Down can talk to npc's and shops
+                KeyIfInTrade( "Down" ) ; Down can talk to npc's and shops
             }
             InitialTradeConfirm()
         }
@@ -1192,7 +1189,7 @@ FindPurposePos()
     {
         if ( IsInTrade() )
         {
-            Send {Esc} ; should eventually find it's self in the "Purpose" menu
+            KeyIfInTrade( "Esc" ) ; should eventually find it's self in the "Purpose" menu
         }
         else
         {
@@ -1213,7 +1210,7 @@ SelectFinalYes()
     {
         if ( VerifyScreen( "TradeImages\bothConfirmed.png", 1000 ) )
         {
-            Send {Up} ; pressing up in this menu will not reset to the bottom selection. 
+            KeyIfInTrade( "Up" ) ; pressing up in this menu will not reset to the bottom selection. 
             if ( VerifyScreen( "TradeImages\yes.png", 1000 ) )
             {
                 KeyIfInTrade( "Enter" )
@@ -1240,13 +1237,13 @@ FinalTradeConfirmation()
         }
         else if ( currentPos == 4 )
         {
-            Send {Up}
+            KeyIfInTrade( "Up" )
             FinalTradeConfirmation()
         }
         else 
         {
             Loop % ( 3 - currentPos ) {
-                Send {Down}
+                KeyIfInTrade( "Down" )
             }
             FinalTradeConfirmation()
         }
@@ -1440,7 +1437,7 @@ StartChatInTrade()
         }
         else
         {
-            Send {Space}
+            KeyIfInTrade( "Space" )
             Sleep 700
         }
     }
@@ -1474,7 +1471,7 @@ SendChatInTrade()
         else
         {
             ; chat input was started but the message was never input, Send {Esc} and hopefully get out of chat input
-            Send {Esc}
+            KeyIfInTrade( "Esc" )
         }
     }
     ; still in trade
