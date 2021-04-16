@@ -15,6 +15,8 @@
 ; 
 ; I could make a variable that will store the guildcard of a player and apply the discount for buying multiple items in seperate purchases
 ;   Would mostly be useful if/once I can accept and bank meseta
+;       requires that the script not pick up extra items
+;       would have to be able to detect and give a message to customer to pick up and move any items from the banking area
 ;   Could even give new players discounts if I can find out what the current guild card numbers are ( make new accnt )
 ;
 ;
@@ -26,9 +28,9 @@
 ;       when/if it accepts multiple currencies, it will have to change when and how it stores the currencies
 ;
 ;
-; SHOULD ADD A CHECK for currencies in the inventory and stackable items when the script parses the inventory txt file
-;   Script should require atleast one of each accepted currency at the end of it's inventory or a full inventory 30/30
-;       otherwise it could lead to vulnerabilities when if it messes up in chat ( picking up dropped items )
+; X ADDED CHECK for currencies in the inventory and stackable items when the user iniates the trading script ( Ctrl + J )
+;   Script requires atleast one of each accepted currency at the end of it's inventory or a full inventory 30/30
+;       otherwise it could lead to vulnerabilities when/if it messes up in chat ( picking up dropped items )
 ;   script is currently not capable of trading stackable items
 ;   currency that is being accepted should not also be sold, at least at this time
 ;
@@ -133,7 +135,7 @@
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
-#IfWinActive Ephinea: Phantasy Star Online Blue Burst
+;#IfWinActive Ephinea: Phantasy Star Online Blue Burst
 ; #Include <Vis2>
 SendMode Event        ; REQUIRED!!!! PSOBB won't accept the deemed superior
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
@@ -141,7 +143,7 @@ SetKeyDelay, 290, 80   ; SetKeyDelay, 220, 70  1st parameter is delay between ke
 SetBatchLines, -1
 
 ; CHANGE THIS TO PSO's DIRECTORY
-global g_psoDirectory := "C:\Program Files\EphineaPSO"
+global g_psoDirectory := "C:\Users\beeni\EphineaPSO"
 
 ; g_inventory DOES NOT store/track accepted/incoming currencies, as it does not want to add it to the trade window
 global g_inventory := GetInventory()
@@ -170,7 +172,7 @@ global g_chatPosition := [ 20, 435, 220, 475 ]
      
 
 t:: ; Ctrl + T - Test
-    ;MsgBox % VerifyScreen( "TradeImages\CancelVerifyImages\1of30.PNG", 3000 )
+    MsgBox % g_inventory[ g_inventory.Length() ] 
     return
 
 
@@ -189,8 +191,23 @@ t:: ; Ctrl + T - Test
 ^r::reload  ; Ctrl + R - Restarts script.
 
 ^j::    ; Ctrl + J - Begins the trading script.
+
+    IsInvAllowed() ; Check to make sure the inventory follows the scripts guidelines
+
+    WaitForTrade()
+
+    ; SHOULD CHANGE GAME ROOM NAME TO "OOS" Out Of Stock or ( Service )
+                
+    MsgBox "End of the trading script"
+    return
+
+
+; Gives directions to trade, accepts incoming trade offers then calls the appropriate functions
+WaitForTrade()
+{
     loopsWithNoTrade := 0
-    while ( g_inventory.Length() > 0 ) 
+    ; WILL NEED TO CHANGE THE CURRENCY CHECK when it accepts multiple currencies, or when individual item prices can be set
+    while ( g_inventory.Length() > 0 and ( g_photonDrops + g_itemPrices[ 1 ] ) <= 99 ) 
     {
         if ( g_inventory.Length() != g_itemPrices.Length() )
         {
@@ -204,7 +221,6 @@ t:: ; Ctrl + T - Test
         ; if somebody is offering to trade
         if ( VerifyScreen( "TradeImages\tradeProposal.png", 3000 ) ) 
         {
-            ; if 
             if ( VerifyScreen( "TradeImages\yesTradeProposal.png", 3000 ) )
             {
                 Send {Enter} ; accept the trade offer
@@ -216,8 +232,7 @@ t:: ; Ctrl + T - Test
                     ; currentTraderName should only be needed if people start to grieve my shop script I.E intentionally try to mess it up by saying random index/s while it's trading with others
                     ; currentTraderName := WindowOCR(40,280,120,15, "Ephinea: Phantasy Star Online Blue Burst") ; using Optical Character Recognition (OCR), get current tradee's username
 
-                    ; watch chat log for trade instructions for up to 5 minutes? while also checking to make sure trade is not cancelled OR CONFIRMED???
-                    ;   will also call to a function that will leave only the requested items in the trade ??? after tradee has requested it/them.
+                    ; watch chat log for trade instructions for up to 5 minutes? while also checking to make sure trade is not cancelled OR CONFIRMED
                     WatchChatLog()
                 }
             }
@@ -232,8 +247,37 @@ t:: ; Ctrl + T - Test
             ++loopsWithNoTrade
         }
     }
-    MsgBox "End of the trading script"
-    return
+}
+
+
+; Any acceptable currency placed at the end will be tracked, if less than 30 items or contains other stackables ExitApp
+IsInvAllowed()
+{
+    lastItem := g_inventory[ g_inventory.Length() ]
+    ; last item/s in inventory is photon drop/s
+    if ( InStr( lastItem, "Photon Drop" ) )
+    {
+        splitItem := StrSplit( lastItem, "x" ) ; the 2nd index should contain a number
+        g_photonDrops += splitItem[ 2 ]
+        g_inventory.RemoveAt( g_inventory.Length() ) ; remove Photon Drop/s from the array
+        g_itemPrices.RemoveAt( g_itemPrices.Length() ) ; removes the price that was listed for Photon Drop/s
+    }
+    else if ( g_inventory.Length() < 30 )
+    {
+        MsgBox "Please start with an inventory of 30/30.  Or end your inventory with Photon Drop/s.  Exiting script."
+        ExitApp
+    }
+    ; Loop through the inventory and make sure their are no stackable items
+    Loop % g_inventory.Length() {
+        checkItem := g_inventory[ A_Index ]
+        splitItem := StrSplit( checkItem, "x" )
+        if ( splitItem[ 2 ] and IsDigit( splitItem[ 2 ] ) )
+        {
+            MsgBox "Accepted currencies at the end of inventory are the only allowed stackables.  Exiting script."
+            ExitApp
+        }
+    }
+}
 
 
 ; Returns the "inventory" from the newest Item Reader file
