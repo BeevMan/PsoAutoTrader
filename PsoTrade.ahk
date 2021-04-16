@@ -130,8 +130,7 @@
 ;
 ; NEED TO CHANGE all or most??? key Send/s that occur during a trade to KeyIfInTrade( toInput )???
 ;
-; Change all VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) into a function??? IsInTrade()
-;   to provide better readability
+;
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
@@ -194,7 +193,7 @@ t:: ; Ctrl + T - Test
 
     IsInvAllowed() ; Check to make sure the inventory follows the scripts guidelines
 
-    WaitForTrade()
+    WaitForTrades()
 
     ; SHOULD CHANGE GAME ROOM NAME TO "OOS" Out Of Stock or ( Service )
                 
@@ -203,7 +202,7 @@ t:: ; Ctrl + T - Test
 
 
 ; Gives directions to trade, accepts incoming trade offers then calls the appropriate functions
-WaitForTrade()
+WaitForTrades()
 {
     loopsWithNoTrade := 0
     ; WILL NEED TO CHANGE THE CURRENCY CHECK when it accepts multiple currencies, or when individual item prices can be set
@@ -436,7 +435,7 @@ WatchChatLog()
     requestedItemIndexes := []
 
     ; while in trade menu 
-    while ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+    while ( IsInTrade() )
     {
         tradeTotal := GetTradeTotal( requestedItemIndexes )
         ; array of index numbers found in the current chat log
@@ -578,8 +577,7 @@ ReverseArray( toRev )
 ; Send the Escape keep until asked yes/no during cancel exchange menu
 EscAndCancelTrade()
 {
-    ; if in trade menu 
-    if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+    if ( IsInTrade() )
     {
         if ( VerifyScreen( "TradeImages\cancelExchange.PNG", 700 ) ) ; if cancel exchange menu is on screen
         {
@@ -858,8 +856,7 @@ RemoveExcessItems( requestedItems )
     itemsInTrade := g_inventory.Length()
 
     Loop % nonRequestedItems.Length() {
-        ; if in trade menu 
-        if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+        if ( IsInTrade() )
         {
             ; highlights "Cancel Candidate"
             HoverCancelCandidate()
@@ -894,14 +891,14 @@ RemoveExcessItems( requestedItems )
     KeyIfInTrade( "Enter" )
 
     ; IF I DON'T CHECK HERE the last item that's getting removed could possibly remain in the trade offer
-    if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) and IsFinalItemRemoved( cancelPos, itemsInTrade ) )
+    if ( IsInTrade() and IsFinalItemRemoved( cancelPos, itemsInTrade ) )
     {
         Send {Esc} ; leave the "Cancel candidate" menu, return to "Purpose" menu
 
         ; highlights "Cancel Candidate", will find "Purpose" menu and then hover "Cancel candidate" if it's not already
         HoverCancelCandidate()
     }
-    else if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) ) ; make sure it's still in trade to avoid giving double fail message ( when RemoveItem() fails an imageSearch too )
+    else if ( IsInTrade() ) ; make sure it's still in trade to avoid giving double fail message ( when RemoveItem() fails an imageSearch too )
     {
         ; explain mistake and exit trade
         SayMsgInTrade( "Let's try again. Extra item left in trade" )
@@ -1087,8 +1084,7 @@ IsFirstOrLastTwo( position, itemsInTrade )
 ; hover/highlight "Cancel Candidate"
 HoverCancelCandidate()
 {
-    ; if in trade menu 
-    if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+    if ( IsInTrade() )
     {
         currentPos := FindPurposePos()
         if ( currentPos == 2 )
@@ -1139,8 +1135,7 @@ GetNonRequested( requested )
 ; selects the first confirmation in the trade
 InitialTradeConfirm()
 {
-    ; if in the trade menu
-    if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+    if ( IsInTrade() )
     {
         currentPos := FindPurposePos()
         ; if confirmed is highlighted 
@@ -1195,9 +1190,7 @@ FindPurposePos()
     }
     else 
     {
-        ; NEEDS FURTHER TESTING
-        ; if in the trade menu
-        if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+        if ( IsInTrade() )
         {
             Send {Esc} ; should eventually find it's self in the "Purpose" menu
         }
@@ -1216,8 +1209,7 @@ FindPurposePos()
 ; Selects the final yes after the final confirmation was selected
 SelectFinalYes()
 {
-    ; if in the trade menu
-    if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+    if ( IsInTrade() )
     {
         if ( VerifyScreen( "TradeImages\bothConfirmed.png", 1000 ) )
         {
@@ -1238,8 +1230,7 @@ SelectFinalYes()
 ; selects the final trade confirmation
 FinalTradeConfirmation()
 {
-    ; if in the trade menu
-    if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+    if ( IsInTrade() )
     {
         currentPos := FindConfirmedPos()
         ; if Final Confirmation is highlighted 
@@ -1429,7 +1420,7 @@ SaidRecentlyInLog( log, timeSaid )
 ; Send {Enter} if in trade window
 KeyIfInTrade( toInput )
 {
-    if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+    if ( IsInTrade() )
     {
         Send {%toInput%}
     }
@@ -1439,8 +1430,7 @@ KeyIfInTrade( toInput )
 ; Send {Space} while in trade menu and chatStart.PNG and greenChat.PNG are not on screen
 StartChatInTrade()
 {
-    ; while in the trade menu
-    while ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+    while ( IsInTrade() )
     {
         ; do not need to check for cancelled.PNG as that is only available when redMenu.PNG is not
         if ( VerifyImageInPosition( g_chatPosition, "TradeImages\chatStart.PNG", 2000 ) or VerifyImageInPosition( g_chatPosition, "TradeImages\greenChat.PNG", 1000 ) ) 
@@ -1488,7 +1478,7 @@ SendChatInTrade()
         }
     }
     ; still in trade
-    else if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+    else if ( IsInTrade() )
     {
         if ( !VerifyScreen( "TradeImages\playerJoining.PNG", 1000 ) and !VerifyScreen( "TradeImages\greenChat.PNG", 1000 ) and !VerifyScreen( "TradeImages\chatStart.PNG", 1000 ) )
         {
@@ -1508,7 +1498,7 @@ SayMsgInTrade( msg )
     StartChatInTrade()
     splitMsg := StrSplit( msg, " " )
     Loop % splitMsg.Length() {
-        if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+        if ( IsInTrade() )
         {
             if ( A_Index > 1 )
             {
@@ -1516,7 +1506,7 @@ SayMsgInTrade( msg )
             }            
             splitWord := StrSplit( splitMsg[ A_Index ] )
             Loop % splitWord.Length() {
-                if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 ) )
+                if ( IsInTrade() )
                 {
                     KeyIfInTrade( splitWord[ A_Index ] )
                 }
@@ -1533,4 +1523,11 @@ SayMsgInTrade( msg )
     }
     
     SendChatInTrade()
+}
+
+
+; Returns true if in a trade
+IsInTrade()
+{
+    return % VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 3000 )
 }
