@@ -127,7 +127,7 @@
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
-;#IfWinActive Ephinea: Phantasy Star Online Blue Burst
+#IfWinActive Ephinea: Phantasy Star Online Blue Burst
 ; #Include <Vis2>
 SendMode Event        ; REQUIRED!!!! PSOBB won't accept the deemed superior
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
@@ -135,7 +135,7 @@ SetKeyDelay, 290, 80   ; SetKeyDelay, 220, 70  1st parameter is delay between ke
 SetBatchLines, -1
 
 ; CHANGE THIS TO PSO's DIRECTORY
-global g_psoDirectory := "C:\Users\beeni\EphineaPSO"
+global g_psoDirectory := "C:\YourPsoFilePathHere"
 
 ; g_inventory DOES NOT store/track accepted/incoming currencies, as it does not want to add it to the trade window
 global g_inventory := GetInventory()
@@ -163,8 +163,8 @@ global g_chatPosition := [ 20, 435, 220, 475 ]
 ^p:: Pause  ; Ctrl + P - Pauses script.
      
 
-t:: ; Ctrl + T - Test
-    MsgBox % GetTradeTotal( [ 1, 2, 3 ] )
+^t:: ; Ctrl + T - Test
+    MsgBox % VerifyScreen( "TradeImages\confirmed.png", 1500 ) 
     return
 
 
@@ -177,7 +177,7 @@ t:: ; Ctrl + T - Test
     MsgBox  itemsInventory, starting at index 1 %displayInventory%
     */
     MessageArray( g_inventory )
-    MessageArray( g_itemPrices )
+    ;MessageArray( g_itemPrices )
     return
 
 ^r::reload  ; Ctrl + R - Restarts script.
@@ -1008,10 +1008,6 @@ RemoveItem( cancelPos, itemsInTrade )
                 ; removes unwanted item from trade menu
                 KeyIfInTrade( "Enter" )
             }
-            else
-            {
-                MsgBox, %leftImage%
-            }
         }
         else if ( itemsInTrade > 3 )
         {
@@ -1027,7 +1023,6 @@ RemoveItem( cancelPos, itemsInTrade )
     }
     else
     {
-        MsgBox, %sliderImage%
         ; explain mistake and exit trade
         SayMsgInTrade( "Let's try again. Wrong items left in trade" )
         EscAndCancelTrade()
@@ -1370,12 +1365,6 @@ IsMessageInLog( msg, timeSaid )
     foundInTime := False
     chatLog := GetChatAsArray()
     saidWithinTime := SaidRecentlyInLog( chatLog, timeSaid )
-    /* DELETE THIS COMMENT AFTER TESTING IS FINISHED
-    MessageArray( saidWithinTime )
-    test := StrLen(saidWithinTime[ 1 ])
-    msgTest := StrLen(msg)
-    MsgBox said in log length %test%  msg length %msgTest%
-    */
     if ( saidWithinTime )
     {
         Loop % saidWithinTime.Length() {
