@@ -92,6 +92,12 @@
 ;   VerifyScreen( filePath, searchTime ) and VerifyImageInPosition( positions, filePath, searchTime ) for imageSearching
 ;
 ;
+; LefSide images will not match if the character class hosting can't equip ( big red x gets inserted into images )
+;   will have to consider retaking slider images with the highlight in it
+;       would rule out being able to sell stackables in the future
+;   require class information??? decide which items should have the x in the image??? 
+;
+;
 ; leftSide images used when there is less then 3 itemsInTrade
 ;   leftSide3rd.PNG needed when currentPos == 3 and there is 3 itemsInTrade
 ; Or when it is the first two or last two itemsInTrade as they share the same slider image and need an additional image check to verify it is at the correct spot
@@ -127,7 +133,7 @@
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
-;#IfWinActive Ephinea: Phantasy Star Online Blue Burst
+#IfWinActive Ephinea: Phantasy Star Online Blue Burst
 ; #Include <Vis2>
 SendMode Event        ; REQUIRED!!!! PSOBB won't accept the deemed superior
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
@@ -135,14 +141,14 @@ SetKeyDelay, 290, 80   ; SetKeyDelay, 220, 70  1st parameter is delay between ke
 SetBatchLines, -1
 
 ; CHANGE THIS TO PSO's DIRECTORY
-global g_psoDirectory := "C:\Users\beeni\EphineaPSO"
+global g_psoDirectory := "C:\Program Files\EphineaPSO"
 
 ; g_inventory DOES NOT store/track accepted/incoming currencies, as it does not want to add it to the trade window
 global g_inventory := GetInventory()
 MessageArray( g_inventory )
 global g_itemPrices := []
 Loop % g_inventory.Length() {
-    g_itemPrices.Push( 1 )
+    g_itemPrices.Push( 0.5 )
     }
 
 global g_timeItemsShown := 0
@@ -183,7 +189,7 @@ t:: ; Ctrl + T - Test
 ^r::reload  ; Ctrl + R - Restarts script.
 
 ^j::    ; Ctrl + J - Begins the trading script.
-
+    
     IsInvAllowed() ; Check to make sure the inventory follows the scripts guidelines
 
     WaitForTrades()
@@ -1008,10 +1014,6 @@ RemoveItem( cancelPos, itemsInTrade )
                 ; removes unwanted item from trade menu
                 KeyIfInTrade( "Enter" )
             }
-            else
-            {
-                MsgBox, %leftImage%
-            }
         }
         else if ( itemsInTrade > 3 )
         {
@@ -1027,7 +1029,6 @@ RemoveItem( cancelPos, itemsInTrade )
     }
     else
     {
-        MsgBox, %sliderImage%
         ; explain mistake and exit trade
         SayMsgInTrade( "Let's try again. Wrong items left in trade" )
         EscAndCancelTrade()
@@ -1351,10 +1352,10 @@ VerifyImageInPosition( positions, filePath, searchTime )
         {
             imageFound := False
             /*
-            if ( InStr( filepath, "TradeImages\CancelVerifyImages\" ) )
-            {
+             if ( InStr( filepath, "TradeImages\CancelVerifyImages\" ) )
+             {
                 MsgBox failed to find on the screen %filePath%
-            }
+             }
             */
         }
         else
@@ -1370,12 +1371,6 @@ IsMessageInLog( msg, timeSaid )
     foundInTime := False
     chatLog := GetChatAsArray()
     saidWithinTime := SaidRecentlyInLog( chatLog, timeSaid )
-    /* DELETE THIS COMMENT AFTER TESTING IS FINISHED
-    MessageArray( saidWithinTime )
-    test := StrLen(saidWithinTime[ 1 ])
-    msgTest := StrLen(msg)
-    MsgBox said in log length %test%  msg length %msgTest%
-    */
     if ( saidWithinTime )
     {
         Loop % saidWithinTime.Length() {
