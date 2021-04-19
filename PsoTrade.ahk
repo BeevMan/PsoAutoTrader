@@ -465,6 +465,7 @@ WatchChatLog()
         else if ( requestedItemIndexes.Length() == 0 and Mod( A_Index, 5) == 0 )
         {
             GiveInstructions()
+            Sleep 3000
         }
         ; should only go into this if statement after items have been requested and left/added to trade
         else if ( requestedItemIndexes.Length() > 0 and !VerifyScreen( "TradeImages\my1stConfirm.PNG", 1500 ) )
@@ -486,7 +487,7 @@ WatchChatLog()
         ;  ( only requested items should be in the trade window )
         else if ( requestedItemIndexes.Length() > 0 and  VerifyScreen( "TradeImages\customerConfirmed.PNG", 1500 ) or VerifyScreen( "TradeImages\customerFinalConfirmed.PNG", 1500 ) )
         {
-            Sleep 3000 ; brief sleep to give customer chance to beat the script to final confirm.
+            Sleep 4000 ; brief sleep to give customer chance to beat the script to final confirm.
             ; Check if customer has put the appropriate payment into the trade window
             if ( IsPaymentCorrect( tradeTotal ) )
             {
@@ -501,6 +502,7 @@ WatchChatLog()
                 else
                 {
                     SayMsgInTrade( "Select final confirmation plz" )
+                    Sleep 3000
                 }
             }
             else if ( VerifyScreen( "TradeImages\customerFinalConfirmed.PNG", 1500 ) )
@@ -514,6 +516,7 @@ WatchChatLog()
             {
                 message := tradeTotal "pd, then confirm trade plz"
                 SayMsgInTrade( message )
+                Sleep 3000
             }
         }
         ; if 1 or more items requested but customer has not confirmed.  COULD MAYBE GET RID OF THE VerifyScreen() call
