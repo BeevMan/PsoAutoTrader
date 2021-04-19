@@ -130,6 +130,7 @@
 ;       should help prevent picking up items / unwanted inputs
 ;
 ;
+; Sending a guild card to the bot seems to get it stuck with the guild card pop up menu
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
@@ -211,8 +212,8 @@ WaitForTrades()
         {
             MsgBox, Error! inventory and item prices have different lengths!
         }
-        ; if divisible by 3 SHOULD MAYBE CHANGE TO SOMETHING ELSE?
-        else if ( loopsWithNoTrade >= 3 and Mod( loopsWithNoTrade, 3 ) == 0 )
+        ; if divisible by 7 SHOULD MAYBE CHANGE TO SOMETHING ELSE?
+        else if ( loopsWithNoTrade >= 3 and Mod( loopsWithNoTrade, 7 ) == 0 )
         {
             TradeMeText() ; speaks and tells anybody in the game to initiate the trade with me 
         }
@@ -381,13 +382,13 @@ ShowItems()
 
 TradeMeText()
 {
-    message := "Trade me, my items cost " g_itemPrices[ 1 ] " pd each. I'm automated ;)"
+    message := "Trade me, my items cost " g_itemPrices[ 1 ] " pd each. I'm automated :)"
     Send {Space}%message%{Enter}
 
     textTimeStamp := TimeInSecs( A_Hour, A_Min, A_Sec )
     Sleep, 5000
     ; if the message was not said recently
-    if ( !IsMessageInLog( message, textTimeStamp ) and !VerifyScreen( "TradeImages\playerJoining.PNG", 1200 ) ) 
+    if ( !IsMessageInLog( message, textTimeStamp ) and !VerifyScreen( "TradeImages\playerJoining.PNG", 900 ) ) 
     {
         Send {Esc}
         ;MsgBox did not say the trade me txt recently
@@ -461,11 +462,11 @@ WatchChatLog()
             ; Removes non requested items from the trade window
             RemoveExcessItems( requestedItemIndexes )
         }
-        ; Give customer instructions every 5 loops, if nothing has been requested. 
-        else if ( requestedItemIndexes.Length() == 0 and Mod( A_Index, 5) == 0 )
+        ; Give customer instructions every 20 loops, if nothing has been requested. 
+        else if ( requestedItemIndexes.Length() == 0 and Mod( A_Index, 15) == 0 )
         {
             GiveInstructions()
-            Sleep 3000
+            Sleep 5000
         }
         ; should only go into this if statement after items have been requested and left/added to trade
         else if ( requestedItemIndexes.Length() > 0 and !VerifyScreen( "TradeImages\my1stConfirm.PNG", 1500 ) )
@@ -1190,15 +1191,9 @@ FindPurposePos()
         if ( IsInTrade() )
         {
             KeyIfInTrade( "Esc" ) ; should eventually find it's self in the "Purpose" menu
+            ; if it didn't match any of those images
+            FindPurposePos()
         }
-        else
-        {
-            EscAndCancelTrade()
-            return
-        }
-        
-        ; if it didn't match any of those images
-        FindPurposePos()
     }
 }
 
