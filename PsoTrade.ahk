@@ -381,7 +381,7 @@ ShowItems()
 
 TradeMeText()
 {
-    message := "Trade me, my items cost " g_itemPrices[ 1 ] " pd each."
+    message := "Trade me, my items cost " g_itemPrices[ 1 ] " pd each. I'm automated ;)"
     Send {Space}%message%{Enter}
 
     textTimeStamp := TimeInSecs( A_Hour, A_Min, A_Sec )
@@ -405,7 +405,7 @@ GiveInstructions()
 {
     numOfItems := g_inventory.Length()
     ; instructions := Tell me the index (1-%numOfItems%) of the item/s you are interested in
-    instructions := "Tell me the index/s (1-" numOfItems ")"
+    instructions := "Say the index/s (1-" numOfItems ") of the item/s you want."
     SayMsgInTrade( instructions )
 }
 
