@@ -470,7 +470,7 @@ WatchChatLog()
             ; Removes non requested items from the trade window
             RemoveExcessItems( requestedItemIndexes )
         }
-        ; Give customer instructions every 20 loops, if nothing has been requested. 
+        ; Give customer instructions every 15 loops, if nothing has been requested. 
         else if ( requestedItemIndexes.Length() == 0 and Mod( A_Index, 15) == 0 )
         {
             GiveInstructions()
@@ -479,18 +479,8 @@ WatchChatLog()
         ; should only go into this if statement after items have been requested and left/added to trade
         else if ( requestedItemIndexes.Length() > 0 and !VerifyScreen( "TradeImages\my1stConfirm.PNG", 1500 ) )
         {
-            ; if script is in the purpose menu
-            if ( VerifyScreen( "TradeImages\purposeMenu.png", 500 ) )
-            {
-                ; Should navigate to the first trade confirm and select it.
-                InitialTradeConfirm()
-            }
-            ; double check that it's not in the purpose menu
-            else if ( !VerifyScreen( "TradeImages\purposeMenu.png", 500 ) )
-            {
-                ; Send {Esc} until it's in the purpose menu
-                KeyIfInTrade( "Esc" )
-            }
+            ; Should navigate to the first trade confirm and select it.
+            InitialTradeConfirm()
         }
         ; if customer has confirmed the 1st time or final time and 1 or more items have been requested
         ;  ( only requested items should be in the trade window )
