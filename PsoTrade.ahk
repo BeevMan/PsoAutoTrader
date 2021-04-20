@@ -130,7 +130,6 @@
 ;       should help prevent picking up items / unwanted inputs
 ;
 ;
-; Sending a guild card to the bot seems to get it stuck with the guild card pop up menu
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
 #Warn  ; Enable warnings to assist with detecting common errors.
@@ -149,7 +148,7 @@ global g_inventory := GetInventory()
 MessageArray( g_inventory )
 global g_itemPrices := []
 Loop % g_inventory.Length() {
-    g_itemPrices.Push( 0.5 )
+    g_itemPrices.Push( 1 )
     }
 
 global g_timeItemsShown := 0
@@ -236,9 +235,13 @@ WaitForTrades()
                 }
             }
         }
-        else if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 1500 ) )
+        else if ( VerifyImageInPosition( g_emptyMenuPosition, "TradeImages\redMenu.PNG", 1200 ) )
         {
             EscAndCancelTrade()
+        }
+        else if ( VerifyScreen( "TradeImages\receiveGuildCard.PNG", 1200 ) )
+        {
+            Send {Esc}
         }
         else 
         {
@@ -350,8 +353,13 @@ ShowItems()
 
     ; +1 so after all items are added it should be in a position to check for addNoItem.PNG or current currencies
     Loop % ( g_inventory.Length() * 2 ) + 1 {
+
+        if ( !IsInTrade() )
+        {
+            Break
+        }
         ; CHECK THAT "add item for trade" is highlighted on odds and itemList.PNG is present for evens. KeyIfInTrade( "Enter" )
-        if ( Mod( A_Index, 2 ) != 0 and VerifyScreen( "TradeImages\addItem.PNG", 3000 ) )
+        else if ( Mod( A_Index, 2 ) != 0 and VerifyScreen( "TradeImages\addItem.PNG", 3000 ) )
         {
             KeyIfInTrade( "Enter" )
         }
@@ -1186,14 +1194,11 @@ FindPurposePos()
     {
         return 5
     }
-    else 
+    else if ( IsInTrade() )
     {
-        if ( IsInTrade() )
-        {
             KeyIfInTrade( "Esc" ) ; should eventually find it's self in the "Purpose" menu
             ; if it didn't match any of those images
             FindPurposePos()
-        }
     }
 }
 
