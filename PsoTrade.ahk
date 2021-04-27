@@ -209,7 +209,7 @@ WaitForTrades()
     {
         if ( g_inventory.Length() != g_itemPrices.Length() )
         {
-            MsgBox, Error! inventory and item prices have different lengths!
+            MsgBox "Error! inventory and item prices have different lengths!"
         }
         ; if divisible by 7 SHOULD MAYBE CHANGE TO SOMETHING ELSE?
         else if ( loopsWithNoTrade >= 3 and Mod( loopsWithNoTrade, 7 ) == 0 )
@@ -332,7 +332,7 @@ VerifyScreen( filePath, searchTime )
         ; ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *200 %filePath%
         ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *120 %filePath%
         if (ErrorLevel = 2)
-            MsgBox Could not conduct the search for %filePath%
+            MsgBox "Could not conduct the search for " %filePath%
         else if (ErrorLevel = 1)
             imageFound := false
         else
@@ -1340,7 +1340,7 @@ VerifyImageInPosition( positions, filePath, searchTime )
         ; ImageSearch, , , 0, 0, A_ScreenWidth, A_ScreenHeight, *200 %filePath%
         ImageSearch, , , x1, y1, x2, y2, *25 %filePath%
         if (ErrorLevel = 2)
-            MsgBox Could not conduct the search for %filePath%
+            MsgBox "Could not conduct the search for " %filePath%
         else if (ErrorLevel = 1)
         {
             imageFound := False
