@@ -1,3 +1,5 @@
+# Installation / Setup
+
 ### I made a new install of PSO, it's not required but recommended so you can keep settings seperate.
 
 ### You will need to install [Bloody HUD](http://universps.online.fr/pso/bb/skin/telechargement.php5?l=343&t=d)
